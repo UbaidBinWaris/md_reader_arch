@@ -45,6 +45,18 @@ cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug 2>&1 && make -j$(nproc) 2>&1
 # Verify binary
 ls -lh build/NanoMark && cd build && timeout 5 ./NanoMark 2>&1 || true
 
+
+# === Phase 3 Commands ===
+
+# Build with debounced rendering, premium scrollbars, and autosave
+cd build && cmake .. && make -j$(nproc)
+
+# Run QtTest cases
+cd build && ctest --output-on-failure
+
+# Rebuild and run smoke test
+cd build && make -j$(nproc) && ls -lh NanoMark && timeout 5 ./NanoMark 2>&1 || true
+
 cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug 2>&1 && make -j$(nproc) 2>&1
 
 cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug 2>&1 && make -j$(nproc) 2>&1

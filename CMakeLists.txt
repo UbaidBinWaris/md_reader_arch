@@ -7,6 +7,8 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+enable_testing()
+
 # Find Qt6 packages
 find_package(Qt6 REQUIRED COMPONENTS
     Core
@@ -26,12 +28,14 @@ set(SOURCES
     src/ui/MainWindow.cpp
     src/ui/TabManager.cpp
     src/ui/WindowManager.cpp
+    src/ui/Dashboard.cpp
     src/editor/Editor.cpp
     src/editor/MarkdownHighlighter.cpp
     src/markdown/MarkdownRenderer.cpp
     src/preview/PreviewPane.cpp
     src/filemanager/FileManager.cpp
     src/filemanager/WorkspaceManager.cpp
+    src/filemanager/AutosaveManager.cpp
     src/study/StudyMode.cpp
     src/study/StickyNotes.cpp
     src/study/Annotations.cpp
@@ -52,12 +56,14 @@ set(HEADERS
     src/ui/MainWindow.h
     src/ui/TabManager.h
     src/ui/WindowManager.h
+    src/ui/Dashboard.h
     src/editor/Editor.h
     src/editor/MarkdownHighlighter.h
     src/markdown/MarkdownRenderer.h
     src/preview/PreviewPane.h
     src/filemanager/FileManager.h
     src/filemanager/WorkspaceManager.h
+    src/filemanager/AutosaveManager.h
     src/study/StudyMode.h
     src/study/StickyNotes.h
     src/study/Annotations.h
@@ -116,3 +122,4 @@ target_compile_options(${PROJECT_NAME} PRIVATE
 install(TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION bin
 )
+add_subdirectory(tests)

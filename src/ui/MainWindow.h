@@ -11,6 +11,8 @@
 #include <QLabel>
 #include <QDockWidget>
 #include <QTreeView>
+#include <QTimer>
+#include <QStackedWidget>
 #include <memory>
 
 namespace NanoMark {
@@ -22,6 +24,8 @@ class FileManager;
 class WorkspaceManager;
 class StudyMode;
 class ThemeManager;
+class AutosaveManager;
+class Dashboard;
 
 class MainWindow : public QMainWindow
 {
@@ -70,15 +74,19 @@ private:
     void setupSidebar();
     void setupShortcuts();
     void createNewTab(const QString &title = "Untitled", const QString &content = "");
+    void schedulePreviewUpdate();
     void updatePreview();
     void updateStatusBar();
     void updateWindowTitle();
     void saveWindowState();
     void restoreWindowState();
+    void updateWorkspaceVisibility();
 
     // UI Components
-    QTabWidget *m_tabWidget = nullptr;
+    QStackedWidget *m_stack = nullptr;
     QSplitter *m_splitter = nullptr;
+    QTabWidget *m_tabWidget = nullptr;
+    Dashboard *m_dashboard = nullptr;
     PreviewPane *m_previewPane = nullptr;
     QDockWidget *m_sidebarDock = nullptr;
     QTreeView *m_fileTreeView = nullptr;
@@ -88,6 +96,8 @@ private:
     // Status bar labels
     QLabel *m_lineColLabel = nullptr;
     QLabel *m_wordCountLabel = nullptr;
+    QLabel *m_readTimeLabel = nullptr;
+    QLabel *m_fileSizeLabel = nullptr;
     QLabel *m_encodingLabel = nullptr;
     QLabel *m_fileTypeLabel = nullptr;
     QLabel *m_modeLabel = nullptr;
@@ -97,7 +107,9 @@ private:
     std::unique_ptr<FileManager> m_fileManager;
     std::unique_ptr<WorkspaceManager> m_workspaceManager;
     std::unique_ptr<StudyMode> m_studyMode;
+    std::unique_ptr<AutosaveManager> m_autosaveManager;
 
+    QTimer *m_renderTimer = nullptr;
     bool m_isStudyMode = false;
 };
 

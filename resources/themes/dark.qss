@@ -22,6 +22,10 @@
 
 /* ── Global ──────────────────────────────────────────────────────────────── */
 
+* {
+    outline: none;
+}
+
 QMainWindow {
     background-color: #0d0d0d;
     color: #ececec;
@@ -277,20 +281,21 @@ QHeaderView::section {
 
 QScrollBar:vertical {
     background-color: transparent;
-    width: 8px;
-    border: none;
+    width: 12px; /* Total area to capture hover */
     margin: 0;
 }
 
 QScrollBar::handle:vertical {
-    background-color: #333333;
-    border-radius: 4px;
+    background-color: #2a2a2a;
+    border-radius: 3px;
     min-height: 40px;
-    margin: 2px;
+    margin: 2px 4px; /* Default thin appearance */
 }
 
 QScrollBar::handle:vertical:hover {
     background-color: #4a4a4a;
+    margin: 1px 2px; /* Expand on hover */
+    border-radius: 4px;
 }
 
 QScrollBar::handle:vertical:pressed {
@@ -307,20 +312,21 @@ QScrollBar::sub-page:vertical {
 
 QScrollBar:horizontal {
     background-color: transparent;
-    height: 8px;
-    border: none;
+    height: 12px;
     margin: 0;
 }
 
 QScrollBar::handle:horizontal {
-    background-color: #333333;
-    border-radius: 4px;
+    background-color: #2a2a2a;
+    border-radius: 3px;
     min-width: 40px;
-    margin: 2px;
+    margin: 4px 2px;
 }
 
 QScrollBar::handle:horizontal:hover {
     background-color: #4a4a4a;
+    margin: 2px 1px;
+    border-radius: 4px;
 }
 
 QScrollBar::handle:horizontal:pressed {

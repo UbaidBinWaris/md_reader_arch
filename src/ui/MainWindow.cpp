@@ -11,6 +11,9 @@
 #include "WorkspaceManager.h"
 #include "StudyMode.h"
 #include "ThemeManager.h"
+#include "SettingsService.h"
+#include "AutosaveManager.h"
+#include "Dashboard.h"
 #include "Logger.h"
 
 #include <QMenuBar>
@@ -18,6 +21,7 @@
 #include <QStatusBar>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QScrollBar>
 #include <QSettings>
 #include <QCloseEvent>
 #include <QDragEnterEvent>
@@ -43,6 +47,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_fileManager(std::make_unique<FileManager>(this))
     , m_workspaceManager(std::make_unique<WorkspaceManager>(this))
     , m_studyMode(std::make_unique<StudyMode>(this))
+    , m_autosaveManager(std::make_unique<AutosaveManager>(this))
 {
     setupUI();
     setupMenuBar();
@@ -52,8 +57,10 @@ MainWindow::MainWindow(QWidget *parent)
     setupShortcuts();
     restoreWindowState();
 
-    // Start with one empty tab
-    createNewTab();
+    m_renderTimer = new QTimer(this);
+    m_renderTimer->setSingleShot(true);
+    connect(m_renderTimer, &QTimer::timeout, this, &MainWindow::updatePreview);
+
 
     setAcceptDrops(true);
     setMinimumSize(900, 600);
@@ -67,15 +74,29 @@ MainWindow::~MainWindow()
 }
 
 // ─── UI Setup ──────────────────────────────────────────────────────────────────
-
 void MainWindow::setupUI()
 {
     setWindowTitle("NanoMark");
     resize(1400, 850);
 
-    // Central splitter: tabs (editor) on left, preview on right
-    m_splitter = new QSplitter(Qt::Horizontal, this);
+    m_stack = new QStackedWidget(this);
 
+    // Page 0: Dashboard
+    m_dashboard = new Dashboard(this);
+    connect(m_dashboard, &Dashboard::newFileRequested, this, &MainWindow::onNewFile);
+    connect(m_dashboard, &Dashboard::openFileRequested, this, [this](const QString &path) {
+        if (path.isEmpty()) onOpenFile();
+        else openFile(path);
+    });
+    connect(m_dashboard, &Dashboard::openFolderRequested, this, [this]() {
+        QString dir = QFileDialog::getExistingDirectory(this, tr("Open Workspace Folder"));
+        if (!dir.isEmpty()) m_workspaceManager->openWorkspace(dir);
+    });
+    m_stack->addWidget(m_dashboard);
+
+    // Page 1: Workspace Splitter
+    m_splitter = new QSplitter(Qt::Horizontal, this);
+    
     m_tabWidget = new QTabWidget(this);
     m_tabWidget->setTabsClosable(true);
     m_tabWidget->setMovable(true);
@@ -92,8 +113,22 @@ void MainWindow::setupUI()
     m_splitter->addWidget(m_previewPane);
     m_splitter->setSizes({650, 650});
     m_splitter->setHandleWidth(2);
+    
+    m_stack->addWidget(m_splitter);
 
-    setCentralWidget(m_splitter);
+    setCentralWidget(m_stack);
+    updateWorkspaceVisibility();
+}
+
+void MainWindow::updateWorkspaceVisibility()
+{
+    if (m_tabWidget->count() == 0) {
+        m_stack->setCurrentWidget(m_dashboard);
+        if (m_sidebarDock) m_sidebarDock->hide();
+    } else {
+        m_stack->setCurrentWidget(m_splitter);
+        if (m_sidebarDock) m_sidebarDock->show();
+    }
 }
 
 void MainWindow::setupMenuBar()
@@ -283,6 +318,8 @@ void MainWindow::setupStatusBar()
 {
     m_lineColLabel = new QLabel("Ln 1, Col 1");
     m_wordCountLabel = new QLabel("Words: 0");
+    m_readTimeLabel = new QLabel("0 min read");
+    m_fileSizeLabel = new QLabel("0 KB");
     m_encodingLabel = new QLabel("UTF-8");
     m_fileTypeLabel = new QLabel("Markdown");
     m_modeLabel = new QLabel("Developer Mode");
@@ -290,6 +327,8 @@ void MainWindow::setupStatusBar()
     statusBar()->addPermanentWidget(m_modeLabel);
     statusBar()->addPermanentWidget(m_fileTypeLabel);
     statusBar()->addPermanentWidget(m_encodingLabel);
+    statusBar()->addPermanentWidget(m_fileSizeLabel);
+    statusBar()->addPermanentWidget(m_readTimeLabel);
     statusBar()->addPermanentWidget(m_wordCountLabel);
     statusBar()->addPermanentWidget(m_lineColLabel);
 }
@@ -379,6 +418,7 @@ void MainWindow::createNewTab(const QString &title, const QString &content)
 
     int idx = m_tabWidget->addTab(editor, title);
     m_tabWidget->setCurrentIndex(idx);
+    updateWorkspaceVisibility();
 }
 
 Editor* MainWindow::currentEditor() const
@@ -419,6 +459,7 @@ void MainWindow::openFile(const QString &filePath)
     // Store the file path in the editor
     if (auto *e = currentEditor()) {
         e->setProperty("filePath", filePath);
+        m_autosaveManager->watchEditor(e, filePath);
     }
 
     m_fileManager->addRecentFile(filePath);
@@ -530,26 +571,24 @@ void MainWindow::onTabCloseRequested(int index)
         }
     }
 
+    m_autosaveManager->unwatchEditor(editor);
     m_tabWidget->removeTab(index);
     delete editor;
 
-    // If no tabs remain, create a new one
-    if (m_tabWidget->count() == 0) {
-        createNewTab();
-    }
+    updateWorkspaceVisibility();
 }
 
 void MainWindow::onEditorTextChanged()
 {
-    updatePreview();
-    updateStatusBar();
-
     // Mark tab as modified
     int idx = m_tabWidget->currentIndex();
     QString title = m_tabWidget->tabText(idx);
     if (!title.endsWith(" •")) {
         m_tabWidget->setTabText(idx, title + " •");
     }
+
+    schedulePreviewUpdate();
+    updateStatusBar();
 }
 
 void MainWindow::onToggleStudyMode()
@@ -645,8 +684,16 @@ void MainWindow::onSidebarFileClicked(const QModelIndex &index)
 
 // ─── Updates ───────────────────────────────────────────────────────────────────
 
+void MainWindow::schedulePreviewUpdate()
+{
+    if (m_isStudyMode || !m_previewPane->isVisible()) return;
+    m_renderTimer->start(250);
+}
+
 void MainWindow::updatePreview()
 {
+    if (m_isStudyMode || !m_previewPane->isVisible()) return;
+
     auto *editor = currentEditor();
     if (!editor) return;
 
@@ -672,14 +719,41 @@ void MainWindow::updateStatusBar()
     auto *editor = currentEditor();
     if (!editor) return;
 
-    QTextCursor cursor = editor->textCursor();
-    int line = cursor.blockNumber() + 1;
-    int col = cursor.columnNumber() + 1;
-    m_lineColLabel->setText(QString("Ln %1, Col %2").arg(line).arg(col));
+    // Line/Col (hide in Study Mode for cleaner reading)
+    if (m_isStudyMode) {
+        m_lineColLabel->hide();
+    } else {
+        m_lineColLabel->show();
+        QTextCursor cursor = editor->textCursor();
+        int line = cursor.blockNumber() + 1;
+        int col = cursor.columnNumber() + 1;
+        m_lineColLabel->setText(QString("Ln %1, Col %2").arg(line).arg(col));
+    }
 
+    // Word Count & Read Time
     QString text = editor->toPlainText();
     int wordCount = text.isEmpty() ? 0 : text.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts).count();
     m_wordCountLabel->setText(QString("Words: %1").arg(wordCount));
+
+    int readTime = qMax(1, (wordCount + 199) / 200);
+    m_readTimeLabel->setText(QString("%1 min read").arg(readTime));
+
+    // File Size
+    QString filePath = editor->property("filePath").toString();
+    if (!filePath.isEmpty() && QFile::exists(filePath)) {
+        qint64 bytes = QFileInfo(filePath).size();
+        if (bytes < 1024) {
+            m_fileSizeLabel->setText(QString("%1 B").arg(bytes));
+        } else if (bytes < 1024 * 1024) {
+            m_fileSizeLabel->setText(QString("%1 KB").arg(qRound(bytes / 1024.0)));
+        } else {
+            m_fileSizeLabel->setText(QString("%1 MB").arg(bytes / (1024.0 * 1024.0), 0, 'f', 1));
+        }
+    } else {
+        m_fileSizeLabel->setText("0 KB");
+    }
+
+    m_modeLabel->setText(m_isStudyMode ? "Study Mode" : "Edit Mode");
 }
 
 void MainWindow::updateWindowTitle()
@@ -701,16 +775,74 @@ void MainWindow::updateWindowTitle()
 
 void MainWindow::saveWindowState()
 {
-    QSettings settings;
-    settings.setValue("window/geometry", saveGeometry());
-    settings.setValue("window/state", saveState());
+    QList<SessionTab> tabs;
+    for (int i = 0; i < m_tabWidget->count(); ++i) {
+        auto *editor = qobject_cast<Editor*>(m_tabWidget->widget(i));
+        if (!editor) continue;
+
+        SessionTab tab;
+        tab.filePath = editor->property("filePath").toString();
+        
+        // Only save if it has a path (ignore empty unsaved tabs unless we add autosave later)
+        if (tab.filePath.isEmpty()) continue;
+
+        tab.cursorLine = editor->textCursor().blockNumber();
+        tab.cursorCol = editor->textCursor().columnNumber();
+        tab.scrollPosition = editor->verticalScrollBar()->value();
+        tab.isActive = (i == m_tabWidget->currentIndex());
+        tabs.append(tab);
+    }
+
+    auto &ss = SettingsService::instance();
+    ss.saveSession(tabs, saveGeometry(), saveState(), m_splitter->saveState());
+    ss.setLastWorkspace(m_workspaceManager->currentWorkspace());
+    ss.set("isStudyMode", m_isStudyMode);
 }
 
 void MainWindow::restoreWindowState()
 {
-    QSettings settings;
-    restoreGeometry(settings.value("window/geometry").toByteArray());
-    restoreState(settings.value("window/state").toByteArray());
+    auto &ss = SettingsService::instance();
+    
+    // Restore window geometry and state
+    restoreGeometry(ss.restoreWindowGeometry());
+    restoreState(ss.restoreWindowState());
+    m_splitter->restoreState(ss.restoreSplitterState());
+
+    // Restore workspace
+    QString lastWs = ss.lastWorkspace();
+    if (!lastWs.isEmpty()) {
+        m_workspaceManager->openWorkspace(lastWs);
+    }
+
+    // Restore study mode
+    m_isStudyMode = ss.get("isStudyMode", false).toBool();
+    // (Apply study mode state if needed - usually done via setupUI)
+
+    // Restore tabs
+    auto tabs = ss.restoreSessionTabs();
+    if (tabs.isEmpty()) {
+        updateWorkspaceVisibility();
+    } else {
+        // Remove the default empty tab if it exists
+        if (m_tabWidget->count() > 0) {
+            auto *w = m_tabWidget->widget(0);
+            m_tabWidget->removeTab(0);
+            delete w;
+        }
+
+        for (const auto &tab : tabs) {
+            if (QFile::exists(tab.filePath)) {
+                openFile(tab.filePath);
+                
+                // Set positions
+                if (auto *editor = currentEditor()) {
+                    QTextCursor cursor = editor->textCursor();
+                    // Basic position restore (can be refined)
+                    editor->verticalScrollBar()->setValue(tab.scrollPosition);
+                }
+            }
+        }
+    }
 }
 
 // ─── Events ────────────────────────────────────────────────────────────────────
