@@ -1,0 +1,40 @@
+.serena
+
+/build
+
+
+# Build & CMake:
+
+/CMakeFiles/
+/CMakeCache.txt
+/Makefile
+/cmake_install.cmake
+/build/
+Qt/IDE artifacts:
+
+*.pro.user
+*.qrc.user
+*.user
+.vscode/
+.idea/
+
+# Build artifacts / binaries:
+
+*.o
+*.obj
+*.so
+*.dll
+*.exe
+NanoMark (binary name)
+
+# Generated/moc files:
+
+moc_*.cpp
+*_moc.cpp
+
+# Misc:
+
+*.log
+*.swp
+*~
+.DS_Store
