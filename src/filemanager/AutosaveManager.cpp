@@ -11,7 +11,6 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QCryptographicHash>
 
 namespace NanoMark {
 
@@ -28,16 +27,34 @@ AutosaveManager::AutosaveManager(QObject *parent)
 void AutosaveManager::watchEditor(Editor *editor, const QString &filePath)
 {
     if (!editor) return;
-    m_watchedEditors[editor] = filePath;
+    
+    AutosaveInfo info;
+    info.uuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    info.originalPath = filePath.isEmpty() ? "Untitled" : filePath;
+    info.autosavePath = autosaveDirectory() + "/session_" + info.uuid + ".autosave";
+    info.isDirty = false;
+
+    m_watchedEditors[editor] = info;
 }
 
-void AutosaveManager::unwatchEditor(Editor *editor)
+void AutosaveManager::unwatchEditor(Editor *editor, bool cleanUp)
 {
-    // Clean up recovery file if it exists and we're done
     if (m_watchedEditors.contains(editor)) {
-        QString recPath = recoveryPath(m_watchedEditors[editor]);
-        QFile::remove(recPath);
+        if (cleanUp) {
+            QString recPath = m_watchedEditors[editor].autosavePath;
+            if (QFile::exists(recPath)) {
+                QFile::remove(recPath);
+                Logger::instance().info("Cleaned up autosave: " + recPath);
+            }
+        }
         m_watchedEditors.remove(editor);
+    }
+}
+
+void AutosaveManager::markDirty(Editor *editor)
+{
+    if (m_watchedEditors.contains(editor)) {
+        m_watchedEditors[editor].isDirty = true;
     }
 }
 
@@ -45,8 +62,11 @@ void AutosaveManager::processAutosaves()
 {
     for (auto it = m_watchedEditors.begin(); it != m_watchedEditors.end(); ++it) {
         Editor *editor = it.key();
-        if (editor->document()->isModified()) {
-            saveRecovery(editor, it.value());
+        AutosaveInfo &info = it.value();
+        
+        if (info.isDirty || editor->document()->isModified()) {
+            saveRecovery(editor, info);
+            info.isDirty = false;
         }
     }
 }
@@ -62,34 +82,41 @@ QString AutosaveManager::autosaveDirectory() const
     return docPath + "/NanoMark/Autosave";
 }
 
-QString AutosaveManager::recoveryPath(const QString &originalPath)
+QStringList AutosaveManager::getAvailableRecoveries() const
 {
-    if (originalPath.isEmpty()) return QString();
+    QStringList recoveries;
+    QDir dir(autosaveDirectory());
+    QStringList filters;
+    filters << "session_*.autosave";
+    dir.setNameFilters(filters);
     
-    // Hash the path to create a unique but stable filename
-    QByteArray hash = QCryptographicHash::hash(originalPath.toUtf8(), QCryptographicHash::Md5);
-    QString filename = hash.toHex() + ".bak";
-    
-    QString docPath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
-    return docPath + "/NanoMark/Autosave/" + filename;
+    for (const QFileInfo &fi : dir.entryInfoList(QDir::Files)) {
+        recoveries << fi.absoluteFilePath();
+    }
+    return recoveries;
 }
 
-bool AutosaveManager::hasRecovery(const QString &originalPath)
+void AutosaveManager::discardAllRecoveries()
 {
-    QString path = recoveryPath(originalPath);
-    return !path.isEmpty() && QFile::exists(path);
+    QStringList recoveries = getAvailableRecoveries();
+    for (const QString &path : recoveries) {
+        QFile::remove(path);
+    }
 }
 
-void AutosaveManager::saveRecovery(Editor *editor, const QString &originalPath)
+void AutosaveManager::saveRecovery(Editor *editor, AutosaveInfo &info)
 {
-    QString path = recoveryPath(originalPath);
-    if (path.isEmpty()) return;
+    if (info.autosavePath.isEmpty()) return;
 
-    QFile file(path);
+    QFile file(info.autosavePath);
     if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        // Write metadata header
+        file.write("OriginalPath: " + info.originalPath.toUtf8() + "\n");
+        file.write("---AUTOSAVE-END-META---\n");
+        // Write content
         file.write(editor->toPlainText().toUtf8());
         file.close();
-        Logger::instance().info("Autosaved recovery for: " + originalPath);
+        Logger::instance().info("Autosaved recovery to: " + info.autosavePath);
     }
 }
 

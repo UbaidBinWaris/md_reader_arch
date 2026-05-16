@@ -4,5 +4,7 @@
         <file>themes/preview-light.css</file>
         <file>themes/dark.qss</file>
         <file>themes/light.qss</file>
+        <file>logo/logo.svg</file>
+        <file>logo/logo.png</file>
     </qresource>
 </RCC>

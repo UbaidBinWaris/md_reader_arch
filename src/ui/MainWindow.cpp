@@ -96,6 +96,7 @@ void MainWindow::setupUI()
 
     // Page 1: Workspace Splitter
     m_splitter = new QSplitter(Qt::Horizontal, this);
+    m_splitter->setObjectName("MainSplitter");
     
     m_tabWidget = new QTabWidget(this);
     m_tabWidget->setTabsClosable(true);
@@ -239,6 +240,7 @@ void MainWindow::setupMenuBar()
 void MainWindow::setupToolBar()
 {
     QToolBar *toolbar = addToolBar(tr("Markdown"));
+    toolbar->setObjectName("MainToolbar");
     toolbar->setMovable(false);
     toolbar->setIconSize(QSize(18, 18));
 
@@ -337,6 +339,7 @@ void MainWindow::setupSidebar()
 {
     // File Explorer sidebar
     m_sidebarDock = new QDockWidget(tr("Explorer"), this);
+    m_sidebarDock->setObjectName("SidebarDock");
     m_sidebarDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
     m_sidebarDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
 
@@ -418,6 +421,10 @@ void MainWindow::createNewTab(const QString &title, const QString &content)
 
     int idx = m_tabWidget->addTab(editor, title);
     m_tabWidget->setCurrentIndex(idx);
+    
+    // Watch editor for autosave (empty path = "Untitled")
+    m_autosaveManager->watchEditor(editor, "");
+
     updateWorkspaceVisibility();
 }
 
@@ -585,6 +592,10 @@ void MainWindow::onEditorTextChanged()
     QString title = m_tabWidget->tabText(idx);
     if (!title.endsWith(" •")) {
         m_tabWidget->setTabText(idx, title + " •");
+    }
+
+    if (auto *e = currentEditor()) {
+        m_autosaveManager->markDirty(e);
     }
 
     schedulePreviewUpdate();
@@ -820,6 +831,66 @@ void MainWindow::restoreWindowState()
 
     // Restore tabs
     auto tabs = ss.restoreSessionTabs();
+    
+    // Check for recovery files
+    QStringList recoveries = m_autosaveManager->getAvailableRecoveries();
+    if (!recoveries.isEmpty()) {
+        QMessageBox msgBox(this);
+        msgBox.setWindowTitle(tr("Session Recovery"));
+        msgBox.setText(tr("NanoMark found unsaved recovery files."));
+        msgBox.setInformativeText(tr("Would you like to restore your previous session?"));
+        
+        QPushButton *restoreBtn = msgBox.addButton(tr("Restore Session"), QMessageBox::AcceptRole);
+        QPushButton *discardBtn = msgBox.addButton(tr("Discard"), QMessageBox::RejectRole);
+        Q_UNUSED(discardBtn);
+        
+        msgBox.exec();
+        
+        if (msgBox.clickedButton() == restoreBtn) {
+            // Restore from recovery files
+            for (const QString &recPath : recoveries) {
+                // Read recovery file
+                QFile file(recPath);
+                if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                    QString content = QString::fromUtf8(file.readAll());
+                    
+                    // Parse metadata
+                    QString originalPath = "Untitled";
+                    int metaEnd = content.indexOf("---AUTOSAVE-END-META---\n");
+                    if (metaEnd != -1) {
+                        QString meta = content.left(metaEnd);
+                        if (meta.startsWith("OriginalPath: ")) {
+                            originalPath = meta.mid(14).trimmed();
+                        }
+                        content = content.mid(metaEnd + 24); // skip tag and newline
+                    }
+                    
+                    // Recreate tab
+                    QString title = originalPath == "Untitled" ? "Untitled" : QFileInfo(originalPath).fileName();
+                    createNewTab(title, content);
+                    
+                    if (auto *editor = currentEditor()) {
+                        if (originalPath != "Untitled") {
+                            editor->setProperty("filePath", originalPath);
+                            m_autosaveManager->watchEditor(editor, originalPath);
+                        }
+                        // Force modified state since it's recovered
+                        editor->document()->setModified(true);
+                        m_autosaveManager->markDirty(editor);
+                    }
+                }
+            }
+        }
+        // Either way, clean up the old recoveries once handled
+        m_autosaveManager->discardAllRecoveries();
+        
+        // Skip normal tab restore if we recovered
+        if (msgBox.clickedButton() == restoreBtn) {
+            if (m_tabWidget->count() == 0) updateWorkspaceVisibility();
+            return;
+        }
+    }
+
     if (tabs.isEmpty()) {
         updateWorkspaceVisibility();
     } else {
