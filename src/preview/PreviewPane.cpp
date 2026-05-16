@@ -24,13 +24,13 @@ PreviewPane::PreviewPane(QWidget *parent)
     settings->setAttribute(QWebEngineSettings::ScrollAnimatorEnabled, true);
 
     // Set a neutral background
-    setStyleSheet("background: #1e1e2e;");
+    setStyleSheet("background: #0d0d0d;");
 
     // Load initial empty page
     QWebEngineView::setHtml(
-        "<html><body style='background:#1e1e2e;color:#cdd6f4;font-family:sans-serif;"
+        "<html><body style='background:#0d0d0d;color:#a1a1a1;font-family:Inter,sans-serif;"
         "display:flex;align-items:center;justify-content:center;height:100vh;'>"
-        "<p style='opacity:0.5;font-size:14px;'>Start typing to see preview...</p>"
+        "<p style='opacity:0.4;font-size:14px;letter-spacing:0.02em;'>Start typing to see preview...</p>"
         "</body></html>");
 }
 

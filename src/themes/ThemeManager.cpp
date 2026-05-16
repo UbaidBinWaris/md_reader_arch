@@ -4,21 +4,18 @@
  */
 
 #include "ThemeManager.h"
+#include "SettingsService.h"
 
 #include <QApplication>
 #include <QFile>
 #include <QTextStream>
-#include <QSettings>
 
 namespace NanoMark {
 
 ThemeManager::ThemeManager()
     : QObject(nullptr)
+    , m_currentTheme(Theme::Dark)
 {
-    // Load saved theme preference
-    QSettings settings;
-    int saved = settings.value("theme", 0).toInt();
-    m_currentTheme = static_cast<Theme>(saved);
 }
 
 ThemeManager& ThemeManager::instance()
@@ -46,9 +43,8 @@ void ThemeManager::loadTheme(Theme theme)
         file.close();
     }
 
-    // Save preference
-    QSettings settings;
-    settings.setValue("theme", static_cast<int>(theme));
+    // Save preference via SQLite
+    SettingsService::instance().set("theme", static_cast<int>(theme));
 
     emit themeChanged(theme);
 }

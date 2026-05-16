@@ -46,6 +46,9 @@ public:
     /** Get all notes for a document */
     QVector<StickyNote> notesForDocument(const QString &documentPath) const;
 
+    /** Get all notes */
+    const QVector<StickyNote>& allNotes() const { return m_notes; }
+
     /** Save notes to disk */
     void save(const QString &filePath) const;
 

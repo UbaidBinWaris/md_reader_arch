@@ -41,6 +41,9 @@ public:
     QVector<Annotation> annotationsForDocument(const QString &documentPath) const;
     QVector<Annotation> bookmarks() const;
 
+    /** Get all annotations */
+    const QVector<Annotation>& allAnnotations() const { return m_annotations; }
+
     void save(const QString &filePath) const;
     void load(const QString &filePath);
 

@@ -30,3 +30,21 @@ cd build && timeout 5 ./NanoMark --help 2>&1 || true
 
 find /home/arch/Documents/github/md_reader_arch/src -name '*.cpp' -o -name '*.h' | sort && echo "---" && find /home/arch/Documents/github/md_reader_arch/resources -type f | sort && echo "---" && wc -l /home/arch/Documents/github/md_reader_arch/src/**/*.cpp /home/arch/Documents/github/md_reader_arch/src/**/*.h 2>/dev/null | tail -1
 
+
+# === Phase 2 Commands ===
+
+# Build after UI/UX theme rewrite (Priority 1)
+cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug 2>&1 && make -j$(nproc) 2>&1
+
+# Build after SQLite SettingsService (Priority 2)
+cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug 2>&1 && make -j$(nproc) 2>&1
+
+# Build after TabManager + WindowManager + NanomarkFile + ServiceRegistry (Priority 3-6)
+cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug 2>&1 && make -j$(nproc) 2>&1
+
+# Verify binary
+ls -lh build/NanoMark && cd build && timeout 5 ./NanoMark 2>&1 || true
+
+cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug 2>&1 && make -j$(nproc) 2>&1
+
+cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug 2>&1 && make -j$(nproc) 2>&1

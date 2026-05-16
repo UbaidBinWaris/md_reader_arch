@@ -6,6 +6,8 @@
 #include "Application.h"
 #include "MainWindow.h"
 #include "ThemeManager.h"
+#include "SettingsService.h"
+#include "ErrorHandler.h"
 #include "Logger.h"
 
 #include <QFile>
@@ -29,8 +31,15 @@ void Application::initialize(const QStringList &args)
 {
     Logger::instance().info("NanoMark starting...");
 
-    // Initialize theme
-    ThemeManager::instance().loadTheme(ThemeManager::Theme::Dark);
+    // Install crash handlers
+    ErrorHandler::instance().install();
+
+    // Initialize SQLite persistence
+    SettingsService::instance().initialize();
+
+    // Load saved theme or default to Dark
+    int savedTheme = SettingsService::instance().get("theme", 0).toInt();
+    ThemeManager::instance().loadTheme(static_cast<ThemeManager::Theme>(savedTheme));
 
     // Create main window
     m_impl->mainWindow = std::make_unique<MainWindow>();

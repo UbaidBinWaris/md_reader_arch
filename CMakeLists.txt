@@ -14,13 +14,18 @@ find_package(Qt6 REQUIRED COMPONENTS
     Widgets
     WebEngineWidgets
     PrintSupport
+    Sql
 )
 
 # Collect all source files
 set(SOURCES
     src/core/main.cpp
     src/core/Application.cpp
+    src/core/SettingsService.cpp
+    src/core/ServiceRegistry.cpp
     src/ui/MainWindow.cpp
+    src/ui/TabManager.cpp
+    src/ui/WindowManager.cpp
     src/editor/Editor.cpp
     src/editor/MarkdownHighlighter.cpp
     src/markdown/MarkdownRenderer.cpp
@@ -30,6 +35,7 @@ set(SOURCES
     src/study/StudyMode.cpp
     src/study/StickyNotes.cpp
     src/study/Annotations.cpp
+    src/study/NanomarkFile.cpp
     src/themes/ThemeManager.cpp
     src/export/ExportManager.cpp
     src/export/PDFExporter.cpp
@@ -40,7 +46,12 @@ set(SOURCES
 
 set(HEADERS
     src/core/Application.h
+    src/core/SettingsService.h
+    src/core/ServiceRegistry.h
+    src/core/PluginInterface.h
     src/ui/MainWindow.h
+    src/ui/TabManager.h
+    src/ui/WindowManager.h
     src/editor/Editor.h
     src/editor/MarkdownHighlighter.h
     src/markdown/MarkdownRenderer.h
@@ -50,6 +61,7 @@ set(HEADERS
     src/study/StudyMode.h
     src/study/StickyNotes.h
     src/study/Annotations.h
+    src/study/NanomarkFile.h
     src/themes/ThemeManager.h
     src/export/ExportManager.h
     src/export/PDFExporter.h
@@ -92,6 +104,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Widgets
     Qt6::WebEngineWidgets
     Qt6::PrintSupport
+    Qt6::Sql
 )
 
 # Compiler warnings
