@@ -73,10 +73,7 @@ MainWindow::MainWindow(QWidget *parent)
     Logger::instance().info("MainWindow created.");
 }
 
-MainWindow::~MainWindow()
-{
-    saveWindowState();
-}
+MainWindow::~MainWindow() = default;
 
 // ─── UI Setup ──────────────────────────────────────────────────────────────────
 void MainWindow::setupUI()
@@ -85,6 +82,11 @@ void MainWindow::setupUI()
     resize(1400, 850);
 
     m_stack = new QStackedWidget(this);
+    m_stack->setAttribute(Qt::WA_OpaquePaintEvent, true);
+    m_stack->setAutoFillBackground(true);
+    QPalette stackPal = m_stack->palette();
+    stackPal.setColor(QPalette::Window, QColor("#0d0d0d"));
+    m_stack->setPalette(stackPal);
 
     // Page 0: Dashboard
     m_dashboard = new Dashboard(this);
@@ -102,10 +104,17 @@ void MainWindow::setupUI()
     // Page 1: Workspace Splitter
     m_splitter = new QSplitter(Qt::Horizontal, this);
     m_splitter->setObjectName("MainSplitter");
+    m_splitter->setAttribute(Qt::WA_OpaquePaintEvent, true);
+    m_splitter->setAutoFillBackground(true);
+    QPalette splitterPal = m_splitter->palette();
+    splitterPal.setColor(QPalette::Window, QColor("#0d0d0d"));
+    m_splitter->setPalette(splitterPal);
     
     m_tabWidget = new QTabWidget(this);
     m_tabManager = std::make_unique<TabManager>(m_tabWidget, this);
 
+    connect(m_tabManager.get(), &TabManager::tabCreated,
+            this, &MainWindow::onTabCreated);
     connect(m_tabWidget, &QTabWidget::currentChanged,
             this, &MainWindow::onTabChanged);
     connect(m_tabWidget, &QTabWidget::tabCloseRequested,
@@ -237,9 +246,9 @@ void MainWindow::setupMenuBar()
     // ── View Menu ──
     QMenu *viewMenu = menuBar()->addMenu(tr("&View"));
 
-    QAction *toggleStudyAction = viewMenu->addAction(tr("Toggle &Study Mode"), this, &MainWindow::onToggleStudyMode);
-    toggleStudyAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_E));
-    toggleStudyAction->setCheckable(true);
+    m_toggleStudyAction = viewMenu->addAction(tr("Toggle &Study Mode"), this, &MainWindow::onToggleStudyMode);
+    m_toggleStudyAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_E));
+    m_toggleStudyAction->setCheckable(true);
 
     QAction *toggleThemeAction = viewMenu->addAction(tr("Toggle &Theme"), this, &MainWindow::onToggleTheme);
     toggleThemeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_T));
@@ -252,10 +261,12 @@ void MainWindow::setupMenuBar()
         if (m_sidebarDock) m_sidebarDock->setVisible(!m_sidebarDock->isVisible());
     });
 
-    QAction *togglePreviewAction = viewMenu->addAction(tr("Toggle &Preview"));
-    togglePreviewAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V));
-    connect(togglePreviewAction, &QAction::triggered, this, [this]() {
-        m_previewPane->setVisible(!m_previewPane->isVisible());
+    m_togglePreviewAction = viewMenu->addAction(tr("Toggle &Preview"));
+    m_togglePreviewAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V));
+    m_togglePreviewAction->setCheckable(true);
+    m_togglePreviewAction->setChecked(true); // Default to visible
+    connect(m_togglePreviewAction, &QAction::triggered, this, [this]() {
+        m_previewPane->setVisible(m_togglePreviewAction->isChecked());
         schedulePreviewUpdate();
     });
 
@@ -484,10 +495,14 @@ void MainWindow::setupShortcuts()
 
 void MainWindow::createNewTab(const QString &title, const QString &content)
 {
-    auto *editor = new Editor(this);
-    if (!content.isEmpty()) {
-        editor->setPlainText(content);
-    }
+    m_tabManager->createTab(title, content);
+}
+
+void MainWindow::onTabCreated(int idx)
+{
+    auto *editor = m_tabManager->editorAt(idx);
+    if (!editor) return;
+
     connect(editor, &QPlainTextEdit::textChanged,
             this, &MainWindow::onEditorTextChanged);
     connect(editor, &QPlainTextEdit::cursorPositionChanged,
@@ -508,9 +523,6 @@ void MainWindow::createNewTab(const QString &title, const QString &content)
         }
     });
 
-    int idx = m_tabWidget->addTab(editor, title);
-    m_tabWidget->setCurrentIndex(idx);
-    
     // Watch editor for autosave (empty path = "Untitled")
     m_autosaveManager->watchEditor(editor, "");
 
@@ -678,6 +690,7 @@ void MainWindow::onTabCloseRequested(int index)
 
 void MainWindow::onEditorTextChanged()
 {
+    if (m_isRestoringSession) return;
     // Mark tab as modified
     int idx = m_tabWidget->currentIndex();
     QString title = m_tabWidget->tabText(idx);
@@ -697,6 +710,10 @@ void MainWindow::onToggleStudyMode()
 {
     m_isStudyMode = !m_isStudyMode;
 
+    if (m_toggleStudyAction) {
+        m_toggleStudyAction->setChecked(m_isStudyMode);
+    }
+
     if (m_isStudyMode) {
         // Study mode: hide editor tabs, show full-width preview
         m_tabWidget->hide();
@@ -708,9 +725,13 @@ void MainWindow::onToggleStudyMode()
             e->setReadOnly(true);
         }
     } else {
-        // Developer mode: show split view
+        // Developer/Edit mode: show split view matching saved preview visibility state
         m_tabWidget->show();
-        m_previewPane->show();
+        if (m_togglePreviewAction) {
+            m_previewPane->setVisible(m_togglePreviewAction->isChecked());
+        } else {
+            m_previewPane->show();
+        }
         m_modeLabel->setText("Developer Mode");
 
         if (auto *e = currentEditor()) {
@@ -831,6 +852,7 @@ void MainWindow::onOutlineHeadingClicked(const QModelIndex &index)
 
 void MainWindow::schedulePreviewUpdate()
 {
+    if (m_isRestoringSession) return;
     if (!m_previewPane->isVisible()) {
         m_renderTimer->start(20); // Still need it for status bar and outline updates
         return;
@@ -933,6 +955,7 @@ void MainWindow::updateStatusBar()
 
 void MainWindow::syncOutlineHighlight()
 {
+    if (m_isRestoringSession) return;
     auto *editor = currentEditor();
     if (!editor || !m_outlineModel || !m_outlineFilterProxyModel) return;
 
@@ -1006,6 +1029,11 @@ void MainWindow::saveWindowState()
     ss.saveSession(tabs, saveGeometry(), saveState(), m_splitter->saveState());
     ss.setLastWorkspace(m_workspaceManager->currentWorkspace());
     ss.set("isStudyMode", m_isStudyMode);
+    if (m_togglePreviewAction) {
+        ss.set("isPreviewVisible", m_togglePreviewAction->isChecked());
+    } else {
+        ss.set("isPreviewVisible", m_previewPane->isVisible());
+    }
 }
 
 void MainWindow::restoreWindowState()
@@ -1029,8 +1057,24 @@ void MainWindow::restoreWindowState()
         m_workspaceManager->openWorkspace(lastWs);
     }
 
-    // Restore study mode
+    // Restore study mode and preview visibility
     m_isStudyMode = ss.get("isStudyMode", false).toBool();
+    bool isPreviewVisible = ss.get("isPreviewVisible", true).toBool();
+
+    if (m_toggleStudyAction) {
+        m_toggleStudyAction->setChecked(m_isStudyMode);
+    }
+    if (m_togglePreviewAction) {
+        m_togglePreviewAction->setChecked(isPreviewVisible);
+    }
+
+    if (m_isStudyMode) {
+        m_tabWidget->hide();
+        m_previewPane->show();
+    } else {
+        m_tabWidget->show();
+        m_previewPane->setVisible(isPreviewVisible);
+    }
 
     // Immediately display the window structure and dashboard (under 50ms startup!)
     updateWorkspaceVisibility();
@@ -1041,6 +1085,8 @@ void MainWindow::restoreWindowState()
 
 void MainWindow::restoreSessionAsync()
 {
+    m_isRestoringSession = true; // Lock all paint, outline, and preview triggers
+
     auto &ss = SettingsService::instance();
     auto tabs = ss.restoreSessionTabs();
     
@@ -1087,12 +1133,15 @@ void MainWindow::restoreSessionAsync()
         
         // Clean up the old recoveries once handled
         m_autosaveManager->discardAllRecoveries();
+        
+        m_isRestoringSession = false; // Unlock
         updateWorkspaceVisibility();
         schedulePreviewUpdate();
         return;
     }
 
     if (tabs.isEmpty()) {
+        m_isRestoringSession = false; // Unlock
         updateWorkspaceVisibility();
     } else {
         // Remove the default empty tab if it exists
@@ -1103,28 +1152,69 @@ void MainWindow::restoreSessionAsync()
         }
 
         int activeIdx = -1;
+        // Step 1: Restore tabs & editors (without triggering outline updates or preview renders)
         for (int i = 0; i < tabs.size(); ++i) {
             const auto &tab = tabs[i];
             if (QFile::exists(tab.filePath)) {
-                openFile(tab.filePath);
-                
-                // Set positions
-                if (auto *editor = currentEditor()) {
-                    QTextCursor cursor = editor->textCursor();
-                    editor->verticalScrollBar()->setValue(tab.scrollPosition);
-                }
-
-                if (tab.isActive) {
-                    activeIdx = m_tabWidget->count() - 1;
+                auto result = m_fileManager->readFile(tab.filePath);
+                if (result.success) {
+                    QFileInfo fi(tab.filePath);
+                    
+                    // Autoritative tabManager creates the tab
+                    auto *editor = m_tabManager->createTab(fi.fileName(), result.content);
+                    if (editor) {
+                        editor->setProperty("filePath", tab.filePath);
+                        m_autosaveManager->watchEditor(editor, tab.filePath);
+                        m_fileManager->addRecentFile(tab.filePath);
+                        
+                        // Temporarily store cursor & scroll info in properties
+                        editor->setProperty("cursorLine", tab.cursorLine);
+                        editor->setProperty("cursorCol", tab.cursorCol);
+                        editor->setProperty("scrollPos", tab.scrollPosition);
+                    }
+                    
+                    if (tab.isActive) {
+                        activeIdx = m_tabWidget->count() - 1;
+                    }
                 }
             }
         }
 
+        m_isRestoringSession = false; // Unlock!
+
         if (activeIdx != -1) {
             m_tabWidget->setCurrentIndex(activeIdx);
         }
+
+        // Step 2: Restore text cursor positions and scrollbar positions safely
+        for (int i = 0; i < m_tabManager->count(); ++i) {
+            auto *editor = m_tabManager->editorAt(i);
+            if (editor) {
+                int line = editor->property("cursorLine").toInt();
+                int col = editor->property("cursorCol").toInt();
+                int scroll = editor->property("scrollPos").toInt();
+
+                QTextCursor cursor = editor->textCursor();
+                cursor.movePosition(QTextCursor::Start);
+                for (int l = 0; l < line; ++l) {
+                    cursor.movePosition(QTextCursor::Down);
+                }
+                for (int c = 0; c < col; ++c) {
+                    cursor.movePosition(QTextCursor::Right);
+                }
+                editor->setTextCursor(cursor);
+
+                // Defer scroll value application slightly to let layout settle
+                QTimer::singleShot(50, editor, [editor, scroll]() {
+                    editor->verticalScrollBar()->setValue(scroll);
+                });
+            }
+        }
+
         updateWorkspaceVisibility();
-        schedulePreviewUpdate();
+        
+        // Step 3: Trigger one clean outline extraction and preview update
+        updatePreview();
     }
 }
 

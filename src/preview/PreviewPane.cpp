@@ -37,11 +37,19 @@ static void installScrollFilterRecursive(QObject *obj, QObject *filter) {
 PreviewPane::PreviewPane(QWidget *parent)
     : QWidget(parent)
 {
+    setAttribute(Qt::WA_OpaquePaintEvent, true);
+    setAutoFillBackground(true);
+    QPalette pal = palette();
+    pal.setColor(QPalette::Window, QColor("#0d0d0d"));
+    setPalette(pal);
+
     m_layout = new QStackedLayout(this);
     m_layout->setContentsMargins(0, 0, 0, 0);
 
     // Create lightweight placeholder
     m_placeholder = new QLabel("Initializing Preview...", this);
+    m_placeholder->setAttribute(Qt::WA_OpaquePaintEvent, true);
+    m_placeholder->setAutoFillBackground(true);
     m_placeholder->setStyleSheet(
         "background: #0d0d0d; color: #555555; font-family: Inter, sans-serif; "
         "font-size: 14px; letter-spacing: 0.02em;"
@@ -50,6 +58,16 @@ PreviewPane::PreviewPane(QWidget *parent)
 
     m_layout->addWidget(m_placeholder);
     m_layout->setCurrentWidget(m_placeholder);
+
+    m_statusOverlay = new QLabel(this);
+    m_statusOverlay->setAlignment(Qt::AlignCenter);
+    m_statusOverlay->setStyleSheet(
+        "background-color: rgba(20, 20, 20, 0.9); color: #888888; "
+        "border: 1px solid #2a2a2a; border-radius: 4px; padding: 4px 8px; "
+        "font-family: Inter, sans-serif; font-size: 11px; font-weight: 600;"
+    );
+    m_statusOverlay->setText("Initializing...");
+    m_statusOverlay->hide();
 }
 
 void PreviewPane::initWebEngine()
@@ -57,6 +75,7 @@ void PreviewPane::initWebEngine()
     if (m_state != PreviewState::Placeholder) return;
 
     m_state = PreviewState::Initializing;
+    updateStatusOverlay("Preview Initializing...", "#a0a0a0");
     Logger::instance().info("Deferred WebEngine initialization starting (Persistent HTML Shell)...");
 
     m_webView = new QWebEngineView(this);
@@ -67,8 +86,13 @@ void PreviewPane::initWebEngine()
     settings->setAttribute(QWebEngineSettings::JavascriptEnabled, true);
     settings->setAttribute(QWebEngineSettings::ScrollAnimatorEnabled, true);
 
-    // Hardening paint properties to prevent white flashes
-    m_webView->setAttribute(Qt::WA_OpaquePaintEvent, false);
+    // Hardening paint properties to prevent white flashes & Wayland transparency leakage
+    m_webView->setAttribute(Qt::WA_OpaquePaintEvent, true);
+    m_webView->setAutoFillBackground(true);
+    QPalette webPal = m_webView->palette();
+    webPal.setColor(QPalette::Base, QColor("#0d0d0d"));
+    webPal.setColor(QPalette::Window, QColor("#0d0d0d"));
+    m_webView->setPalette(webPal);
     m_webView->setStyleSheet("background: #0d0d0d;");
     m_webView->page()->setBackgroundColor(QColor("#0d0d0d"));
     
@@ -188,35 +212,24 @@ void PreviewPane::initWebEngine()
 
 void PreviewPane::onLoadStarted()
 {
+    m_handshakeRetries = 0;
+    updateStatusOverlay("Preview Initializing...", "#a0a0a0");
     Logger::instance().info("PreviewPane: Load started");
 }
 
-void PreviewPane::onLoadProgress(int /*progress*/)
+void PreviewPane::onLoadProgress(int progress)
 {
-    // Can be used for debugging
+    if (m_state == PreviewState::Initializing) {
+        updateStatusOverlay(QString("Preview Initializing... %1%").arg(progress), "#10a37f");
+    }
 }
 
 void PreviewPane::onLoadFinished(bool ok)
 {
     if (!ok) {
         Logger::instance().error("PreviewPane: Load failed. Falling back to QTextBrowser...");
-        m_state = PreviewState::Failed;
-
-        if (!m_fallbackBrowser) {
-            m_fallbackBrowser = new QTextBrowser(this);
-            m_fallbackBrowser->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-            m_fallbackBrowser->installEventFilter(this);
-            m_fallbackBrowser->setStyleSheet("background: #0d0d0d; color: #e3e3e3; border: none; font-family: Inter, sans-serif; font-size: 14px; padding: 20px;");
-            m_layout->addWidget(m_fallbackBrowser);
-        }
-        
-        m_layout->setCurrentWidget(m_fallbackBrowser);
-        
-        if (m_hasPendingUpdate) {
-            m_fallbackBrowser->setHtml(m_pendingUpdate.htmlBody);
-        } else if (!m_pendingHtml.isEmpty()) {
-            m_fallbackBrowser->setHtml(m_pendingHtml);
-        }
+        updateStatusOverlay("Preview Failed", "#ef4444");
+        switchToFallback();
         return;
     }
 
@@ -227,6 +240,7 @@ void PreviewPane::onLoadFinished(bool ok)
                 Logger::instance().info("PreviewPane: Handshake successful. Persistent WebEngine Ready.");
                 m_state = PreviewState::Ready;
                 m_shellLoaded = true;
+                updateStatusOverlay("Preview Ready", "#10a37f");
                 m_layout->setCurrentWidget(m_webView); // Swap placeholder -> WebEngine
                 
                 // Execute pending update if any
@@ -243,8 +257,15 @@ void PreviewPane::onLoadFinished(bool ok)
                     m_pendingHtml.clear();
                 }
             } else {
-                Logger::instance().warning("PreviewPane: Handshake not ready yet. Retrying in 10ms...");
-                QTimer::singleShot(10, this, [this]() { onLoadFinished(true); });
+                m_handshakeRetries++;
+                if (m_handshakeRetries > 200) { // 2 seconds of 10ms retries
+                    Logger::instance().error("PreviewPane: Handshake timed out after 2 seconds. Falling back to QTextBrowser...");
+                    updateStatusOverlay("Preview Failed", "#ef4444");
+                    switchToFallback();
+                } else {
+                    Logger::instance().warning(QString("PreviewPane: Handshake not ready yet (retry %1). Retrying in 10ms...").arg(m_handshakeRetries));
+                    QTimer::singleShot(10, this, [this]() { onLoadFinished(true); });
+                }
             }
         });
     }
@@ -271,6 +292,8 @@ void PreviewPane::setHtml(const QString &html)
     if (m_state == PreviewState::Failed) {
         if (!m_fallbackBrowser) {
             m_fallbackBrowser = new QTextBrowser(this);
+            m_fallbackBrowser->setAttribute(Qt::WA_OpaquePaintEvent, true);
+            m_fallbackBrowser->setAutoFillBackground(true);
             m_fallbackBrowser->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
             m_fallbackBrowser->installEventFilter(this);
             m_fallbackBrowser->setStyleSheet("background: #0d0d0d; color: #e3e3e3; border: none; font-family: Inter, sans-serif; font-size: 14px; padding: 20px;");
@@ -305,6 +328,8 @@ void PreviewPane::updatePreview(const QString &htmlBody, bool isDark, const QStr
     if (m_state == PreviewState::Failed) {
         if (!m_fallbackBrowser) {
             m_fallbackBrowser = new QTextBrowser(this);
+            m_fallbackBrowser->setAttribute(Qt::WA_OpaquePaintEvent, true);
+            m_fallbackBrowser->setAutoFillBackground(true);
             m_fallbackBrowser->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
             m_fallbackBrowser->installEventFilter(this);
             m_fallbackBrowser->setStyleSheet(isDark ? 
@@ -388,6 +413,61 @@ bool PreviewPane::eventFilter(QObject *obj, QEvent *event)
         }
     }
     return QWidget::eventFilter(obj, event);
+}
+
+void PreviewPane::switchToFallback()
+{
+    m_state = PreviewState::Failed;
+    if (!m_fallbackBrowser) {
+        m_fallbackBrowser = new QTextBrowser(this);
+        m_fallbackBrowser->setAttribute(Qt::WA_OpaquePaintEvent, true);
+        m_fallbackBrowser->setAutoFillBackground(true);
+        m_fallbackBrowser->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        m_fallbackBrowser->installEventFilter(this);
+        m_fallbackBrowser->setStyleSheet("background: #0d0d0d; color: #e3e3e3; border: none; font-family: Inter, sans-serif; font-size: 14px; padding: 20px;");
+        m_layout->addWidget(m_fallbackBrowser);
+    }
+    m_layout->setCurrentWidget(m_fallbackBrowser);
+    updateStatusOverlay("Fallback Active", "#eab308");
+    
+    if (m_hasPendingUpdate) {
+        m_fallbackBrowser->setHtml(QString("<html><head><style>%1</style></head><body class='%2'>%3</body></html>")
+            .arg(m_pendingUpdate.css, m_pendingUpdate.isDark ? "dark" : "light", m_pendingUpdate.htmlBody));
+    } else if (!m_pendingHtml.isEmpty()) {
+        m_fallbackBrowser->setHtml(m_pendingHtml);
+    }
+}
+
+void PreviewPane::updateStatusOverlay(const QString &text, const QString &color)
+{
+    if (!m_statusOverlay) return;
+    m_statusOverlay->setText(text);
+    m_statusOverlay->setStyleSheet(
+        QString("background-color: rgba(20, 20, 20, 0.9); color: %1; "
+                "border: 1px solid #2a2a2a; border-radius: 4px; padding: 4px 8px; "
+                "font-family: Inter, sans-serif; font-size: 11px; font-weight: 600;")
+        .arg(color)
+    );
+    m_statusOverlay->adjustSize();
+    
+    // Reposition floating badge
+    int w = m_statusOverlay->width();
+    m_statusOverlay->move(width() - w - 16, 16);
+    m_statusOverlay->show();
+
+    // Auto-hide when loading is successful or fallback is active
+    if (text == "Preview Ready" || text == "Fallback Active") {
+        QTimer::singleShot(2000, m_statusOverlay, &QWidget::hide);
+    }
+}
+
+void PreviewPane::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    if (m_statusOverlay) {
+        int w = m_statusOverlay->width();
+        m_statusOverlay->move(width() - w - 16, 16);
+    }
 }
 
 } // namespace NanoMark

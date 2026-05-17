@@ -37,6 +37,7 @@ public:
 
 protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private slots:
     void onLoadFinished(bool ok);
@@ -52,14 +53,18 @@ private:
     };
 
     void initWebEngine();
+    void switchToFallback();
+    void updateStatusOverlay(const QString &text, const QString &color);
 
     PreviewState m_state = PreviewState::Placeholder;
     QStackedLayout *m_layout = nullptr;
     QLabel *m_placeholder = nullptr;
     QWebEngineView *m_webView = nullptr;
     QTextBrowser *m_fallbackBrowser = nullptr;
+    QLabel *m_statusOverlay = nullptr;
     QString m_lastHtml;
     QString m_pendingHtml;
+    int m_handshakeRetries = 0;
 
     // Fast innerHTML updates state
     bool m_shellLoaded = false;

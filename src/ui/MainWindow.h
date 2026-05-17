@@ -18,6 +18,7 @@
 class QLineEdit;
 class QStandardItemModel;
 class QSortFilterProxyModel;
+class QAction;
 
 namespace NanoMark {
 
@@ -63,6 +64,7 @@ private slots:
     void onExportPDF();
     void onExportHTML();
     void onTabChanged(int index);
+    void onTabCreated(int index);
     void onTabCloseRequested(int index);
     void onEditorTextChanged();
     void onToggleStudyMode();
@@ -106,6 +108,8 @@ private:
     QLineEdit *m_outlineSearchEdit = nullptr;
     QStandardItemModel *m_outlineModel = nullptr;
     QSortFilterProxyModel *m_outlineFilterProxyModel = nullptr;
+    QAction *m_toggleStudyAction = nullptr;
+    QAction *m_togglePreviewAction = nullptr;
 
     // Status bar labels
     QLabel *m_lineColLabel = nullptr;
@@ -126,6 +130,7 @@ private:
 
     QTimer *m_renderTimer = nullptr;
     bool m_isStudyMode = false;
+    bool m_isRestoringSession = false;
 };
 
 } // namespace NanoMark

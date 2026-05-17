@@ -59,10 +59,19 @@ Editor::Editor(QWidget *parent)
     setCenterOnScroll(false);
     
     // Force Opaque background to resolve compositor transparency/bleed-through bugs
+    setAutoFillBackground(true);
+    setAttribute(Qt::WA_OpaquePaintEvent, true);
     viewport()->setAttribute(Qt::WA_OpaquePaintEvent, true);
     viewport()->setAutoFillBackground(true);
+    
+    QPalette pal = palette();
+    pal.setColor(QPalette::Base, QColor("#0d0d0d"));
+    pal.setColor(QPalette::Window, QColor("#0d0d0d"));
+    setPalette(pal);
+
     QPalette p = viewport()->palette();
     p.setColor(QPalette::Base, QColor("#0d0d0d"));
+    p.setColor(QPalette::Window, QColor("#0d0d0d"));
     p.setColor(QPalette::Text, QColor("#e3e3e3")); // Premium text styling contrast
     viewport()->setPalette(p);
     

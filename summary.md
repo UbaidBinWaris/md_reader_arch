@@ -83,6 +83,8 @@ tests/         CMakeLists.txt, test_renderer.cpp
 - Contextually hides Line/Col information in Study Mode.
 - **Startup Recovery**: Bypasses dialog prompts to **always restore recovery sessions automatically** on startup, backed by try-catch fallback structures to open a clean workspace on database/file read failures.
 - **Interactive Outline & Scroll Sync**: Coordinates two-way scroll synchronization, promptless startup recoveries, and active reading section tracking. Exposes the viewport-top scroll alignment logic (`setValue(maximum())` followed by `ensureCursorVisible()`) to scroll editor text perfectly to the top edge on heading double-clicks.
+- **View Layout State Persistence**: Saves the exact visibility state of the preview pane (`isPreviewVisible`) in SQLite and restores it on startup, resolving startup layout glitches.
+- **Lockstep Toggle Synchronizations**: Exposes checkable menu actions (`m_toggleStudyAction`, `m_togglePreviewAction`) and binds their check states in absolute phase-lockstep with backend variables, enabling `Ctrl + E` to toggle Study Mode instantly on the very first keystroke after starting in editor-only mode.
 
 ---
 
