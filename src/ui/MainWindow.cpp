@@ -768,7 +768,14 @@ void MainWindow::onOutlineHeadingClicked(const QModelIndex &index)
     if (block.isValid()) {
         QTextCursor cursor(block);
         editor->setTextCursor(cursor);
-        editor->ensureCursorVisible();
+        
+        // Scroll the block perfectly to the top of the viewport
+        editor->verticalScrollBar()->setValue(block.blockNumber());
+        
+        // Ensure the clicked outline tree item itself is perfectly scrolled and centered in view
+        m_outlineView->scrollTo(index);
+        m_outlineView->setCurrentIndex(index);
+        
         editor->setFocus();
     }
 }
