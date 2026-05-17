@@ -109,25 +109,33 @@ tests/         CMakeLists.txt, test_renderer.cpp
 ### Preview Performance (Phase 3.4 Stabilization & Caching)
 - **Persistent HTML Shell & innerHTML Swap**: Instead of calling `setHtml()` repeatedly, which reloads Chromium entirely and causes white flashes, `PreviewPane` bootstraps a static HTML shell *once*. Subsequent rendering updates are executed using high-speed JavaScript `innerHTML` swaps via safe `QJsonDocument` string serialization. This preserves DOM states, scroll positions, and reduces CPU rendering overhead to near zero.
 - **Timing-Safe JavaScript Handshake**: Handled race conditions by checking `window.nanoMarkReady === true` via a C++ deferred polling handshake loop inside `onLoadFinished()`. Guarantees JS functions are fully parsed and live before content injection starts.
+- **Global JS Scope Fix**: Exposed the swap functions directly on the `window.updateContent` namespace, completely resolving WebEngine scope isolation issues.
 - **QTextBrowser Fallback Engine**: If Chromium fails, crashes, or is unavailable in the host sandbox environment, rendering automatically hot-swaps to a native, theme-harmonized `QTextBrowser` widget, preventing blank preview states.
 - **Robust Exception Logging**: Connected a global `window.onerror` catch block in the JS shell to route runtime scripting errors directly to developer logs via a `runJavaScript` logging callback.
 - **Opaque Dark Paint Override**: Completely eliminated white rendering flashes. Sets `Qt::WA_OpaquePaintEvent` false, overrides Chromium's background directly to `#0d0d0d`, and embeds immediate CSS background styling into the bootstrap shell.
+- **Wayland Software Renderer Fallback**: Configured `--disable-gpu-compositing` on `QTWEBENGINE_CHROMIUM_FLAGS` in `main.cpp` to prevent transparent compositor bleed-through crashes on Linux Wayland.
 - **Deferred Initialization**: The heavy Chromium WebEngine is instantiated *only* when the preview is opened/visible, cutting idle memory footprint drastically.
-- **Debounced Rendering**: Preview updates use a 250ms debounce timer to combine status updates and rendering pipelines during active typing.
+- **Blazing-Fast Debounced Rendering**: Debounce interval is configured to **`20ms`** (equaling 50 FPS!), which delivers incredibly fluid, instant, and lag-free real-time typing preview updates without any visual delay.
+- **Study Mode Full-Width Rendering**: Completely decoupled rendering loops from `m_isStudyMode` checks, allowing users to read their compiled documents in elegant distraction-free full-width Study views.
 - **Instant Tab Switching (HTML Cache)**: Each tab's `Editor` caches its rendered HTML body. If the document hasn't changed (i.e. scrolling, cursor moves), NanoMark serves the cached HTML instantly (`< 1ms`) upon switching tabs.
+- **Ready-Gated Cache Verification & Handshake Clear**: Solved initialization caching bugs by gating HTML comparison checks on `m_state == PreviewState::Ready`, and proactively clearing `m_lastHtmlBody` right before executing handshake pending updates, ensuring document-load injections always run flawlessly.
+- **Offline Highlight Safety**: Added checks to prevent JS failures if highlight.js CDN stylesheets are offline.
 
 ### Asynchronous Session Restoration (Phase 3.4 Startup Upgrade)
+- **Authoritative TabManager Sync**: Standardized all session saving (`saveWindowState`) and closing (`closeEvent`) routines to query the authoritative model tracker `TabManager` directly, resolving raw QTabWidget widget desyncs.
 - **Deferred tab restores**: To achieve sub-50ms cold boots, `MainWindow` loads the dashboard, settings, and workspace geometry synchronously, and then schedules all recovery/tab restoration work asynchronously via `QTimer::singleShot(0, ...)`. Tabs load progressively in the background without blocking the UI thread.
+- **Continuous Document Outline**: Pulled heading generation outside of cache dirty checks so outlines rebuild instantly on tab swap and cold boot. Shows a dim/italic `"No headings found"` placeholder row when headers are empty.
+- **Interactive Outline Navigation**: Connected the `QTreeView` outline items to scroll the editor by block-by-line using stored `lineNumber` and native `QTextBlock` APIs.
+- **Premium Stylings**: Integrated opaque editor composition overlays, raised text contrast to `#f8f9fa` for superb readability, added dark-contrasted selected tab active states, and enforced solid `#2a2a2a` borders throughout the global `dark.qss` layout.
 
 ---
 
 ## Module 5: filemanager — Autosave & File I/O
 
-### AutosaveManager.h / .cpp (Overhauled in Phase 3.1)
-- **Background Autosave**: Periodically creates `.autosave` files using generated **UUIDs** (e.g., `session_<UUID>.autosave`) in `~/Documents/NanoMark/Autosave/`.
+### AutosaveManager.h / .cpp (Overhauled in Phase 3.4)
+- **Keystroke-Debounced Instant Autosave**: Replaced 15-second background timers with a highly responsive `200ms` single-shot debounce timer. The editor now automatically saves your modifications to the `.autosave` recovery file immediately as you type (triggered instantly 200ms after you pause).
 - **Tracking**: Correctly tracks and saves unsaved "Untitled" documents. Connects to `QPlainTextEdit::textChanged`.
 - **Metadata**: Embeds original file paths directly inside the backup file for seamless restoration.
-- **Frequency**: Every 15 seconds for actively modified documents.
 - **Cleanup**: Removes backup files upon successful manual save or clean close.
 
 ---

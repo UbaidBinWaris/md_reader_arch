@@ -55,6 +55,7 @@ private:
     void saveRecovery(Editor *editor, AutosaveInfo &info);
 
     QTimer *m_timer = nullptr;
+    QTimer *m_debounceTimer = nullptr;
     QHash<Editor*, AutosaveInfo> m_watchedEditors;
     static constexpr int AUTOSAVE_INTERVAL_MS = 15000; // 15 seconds
 };

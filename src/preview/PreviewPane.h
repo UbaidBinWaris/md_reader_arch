@@ -29,6 +29,9 @@ public:
     /** Update preview using fast DOM innerHTML hot-swap */
     void updatePreview(const QString &htmlBody, bool isDark, const QString &css);
 
+    /** Scroll the preview pane to a given percentage [0.0 - 1.0] */
+    void scrollToPercentage(double percentage);
+
     /** Export current content to PDF */
     void exportToPDF(const QString &filePath, const QString &html);
 

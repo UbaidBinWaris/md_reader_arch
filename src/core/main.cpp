@@ -10,7 +10,7 @@
 int main(int argc, char *argv[])
 {
     // Silence harmless Vulkan/GPU warnings on Linux WebEngine
-    qputenv("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu --disable-vulkan");
+    qputenv("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu --disable-vulkan --disable-gpu-compositing");
 
     // Enable high-DPI scaling
     QApplication::setHighDpiScaleFactorRoundingPolicy(

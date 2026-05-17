@@ -15,6 +15,7 @@
 #include "AutosaveManager.h"
 #include "Dashboard.h"
 #include "CommandPalette.h"
+#include "TabManager.h"
 #include "Logger.h"
 
 #include <QMenuBar>
@@ -37,6 +38,7 @@
 #include <QVBoxLayout>
 #include <QStandardItemModel>
 #include <QHeaderView>
+#include <QTextBlock>
 #include <QApplication>
 #include <QStyle>
 
@@ -100,9 +102,7 @@ void MainWindow::setupUI()
     m_splitter->setObjectName("MainSplitter");
     
     m_tabWidget = new QTabWidget(this);
-    m_tabWidget->setTabsClosable(true);
-    m_tabWidget->setMovable(true);
-    m_tabWidget->setDocumentMode(true);
+    m_tabManager = std::make_unique<TabManager>(m_tabWidget, this);
 
     connect(m_tabWidget, &QTabWidget::currentChanged,
             this, &MainWindow::onTabChanged);
@@ -136,7 +136,10 @@ void MainWindow::setupUI()
             else if (cmd == "pdf") onExportPDF();
             else if (cmd == "html") onExportHTML();
             else if (cmd == "sidebar") { if (m_sidebarDock) m_sidebarDock->setVisible(!m_sidebarDock->isVisible()); }
-            else if (cmd == "preview") { m_previewPane->setVisible(!m_previewPane->isVisible()); }
+            else if (cmd == "preview") {
+                m_previewPane->setVisible(!m_previewPane->isVisible());
+                schedulePreviewUpdate();
+            }
             else if (cmd == "quit") close();
         } else if (action.startsWith("file:")) {
             QString path = action.mid(5);
@@ -251,6 +254,7 @@ void MainWindow::setupMenuBar()
     togglePreviewAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V));
     connect(togglePreviewAction, &QAction::triggered, this, [this]() {
         m_previewPane->setVisible(!m_previewPane->isVisible());
+        schedulePreviewUpdate();
     });
 
     viewMenu->addSeparator();
@@ -404,6 +408,7 @@ void MainWindow::setupSidebar()
     m_outlineView->setHeaderHidden(true);
     m_outlineView->setModel(new QStandardItemModel(this));
     m_outlineDock->setWidget(m_outlineView);
+    connect(m_outlineView, &QTreeView::clicked, this, &MainWindow::onOutlineHeadingClicked);
     addDockWidget(Qt::LeftDockWidgetArea, m_outlineDock);
 
     // Tab the two docks together
@@ -456,6 +461,7 @@ void MainWindow::createNewTab(const QString &title, const QString &content)
     m_autosaveManager->watchEditor(editor, "");
 
     updateWorkspaceVisibility();
+    schedulePreviewUpdate();
 }
 
 Editor* MainWindow::currentEditor() const
@@ -508,6 +514,7 @@ void MainWindow::openFile(const QString &filePath)
     }
 
     Logger::instance().info("Opened file: " + filePath);
+    schedulePreviewUpdate();
 }
 
 void MainWindow::onSaveFile()
@@ -658,6 +665,7 @@ void MainWindow::onToggleStudyMode()
     }
 
     emit modeChanged(m_isStudyMode);
+    schedulePreviewUpdate();
 }
 
 void MainWindow::onToggleTheme()
@@ -734,15 +742,36 @@ void MainWindow::onSidebarFileClicked(const QModelIndex &index)
     }
 }
 
+void MainWindow::onOutlineHeadingClicked(const QModelIndex &index)
+{
+    QVariant data = index.data(Qt::UserRole);
+    if (!data.isValid()) return;
+
+    int lineNum = data.toInt();
+    auto *editor = currentEditor();
+    if (!editor) return;
+
+    QTextDocument *doc = editor->document();
+    if (!doc) return;
+
+    QTextBlock block = doc->findBlockByLineNumber(lineNum);
+    if (block.isValid()) {
+        QTextCursor cursor(block);
+        editor->setTextCursor(cursor);
+        editor->ensureCursorVisible();
+        editor->setFocus();
+    }
+}
+
 // ─── Updates ───────────────────────────────────────────────────────────────────
 
 void MainWindow::schedulePreviewUpdate()
 {
-    if (m_isStudyMode || !m_previewPane->isVisible()) {
-        m_renderTimer->start(250); // Still need it for status bar updates
+    if (!m_previewPane->isVisible()) {
+        m_renderTimer->start(20); // Still need it for status bar and outline updates
         return;
     }
-    m_renderTimer->start(250);
+    m_renderTimer->start(20); // 20ms debounce is completely imperceptible to the human eye, feeling absolutely instant and real-time!
 }
 
 void MainWindow::updatePreview()
@@ -750,32 +779,44 @@ void MainWindow::updatePreview()
     // Always update status bar on the debounced tick
     updateStatusBar();
 
-    if (m_isStudyMode || !m_previewPane->isVisible()) return;
-
     auto *editor = currentEditor();
     if (!editor) return;
+
+    QString markdown = editor->toPlainText();
+
+    // Always update outline (on keystrokes, loads, and tab switches) regardless of preview pane visibility!
+    auto headings = m_renderer->extractHeadings(markdown);
+    auto *model = qobject_cast<QStandardItemModel*>(m_outlineView->model());
+    if (model) {
+        model->clear();
+        if (headings.isEmpty()) {
+            auto *item = new QStandardItem(tr("No headings found"));
+            item->setEditable(false);
+            QFont italicFont = item->font();
+            italicFont.setItalic(true);
+            item->setFont(italicFont);
+            item->setForeground(QBrush(QColor("#777777")));
+            model->appendRow(item);
+        } else {
+            for (const auto &h : headings) {
+                auto *item = new QStandardItem(QString("  ").repeated(h.level - 1) + h.text);
+                item->setEditable(false);
+                item->setData(h.lineNumber, Qt::UserRole);
+                model->appendRow(item);
+            }
+        }
+    }
+
+    // Return early for WebEngine updates if preview pane is hidden
+    if (!m_previewPane->isVisible()) return;
 
     bool isDark = ThemeManager::instance().currentTheme() == ThemeManager::Theme::Dark;
     QString css = m_renderer->getPreviewCss();
 
     if (editor->isHtmlDirty()) {
-        QString markdown = editor->toPlainText();
         QString htmlBody = m_renderer->renderBody(markdown);
         editor->setCachedHtml(htmlBody);
-        
         m_previewPane->updatePreview(htmlBody, isDark, css);
-
-        // Update outline
-        auto headings = m_renderer->extractHeadings(markdown);
-        auto *model = qobject_cast<QStandardItemModel*>(m_outlineView->model());
-        if (model) {
-            model->clear();
-            for (const auto &h : headings) {
-                auto *item = new QStandardItem(QString("  ").repeated(h.level - 1) + h.text);
-                item->setEditable(false);
-                model->appendRow(item);
-            }
-        }
     } else {
         // Cache hit! Instant rendering skip
         m_previewPane->updatePreview(editor->cachedHtml(), isDark, css);
@@ -844,14 +885,14 @@ void MainWindow::updateWindowTitle()
 void MainWindow::saveWindowState()
 {
     QList<SessionTab> tabs;
-    for (int i = 0; i < m_tabWidget->count(); ++i) {
-        auto *editor = qobject_cast<Editor*>(m_tabWidget->widget(i));
+    for (int i = 0; i < m_tabManager->count(); ++i) {
+        auto *editor = m_tabManager->editorAt(i);
         if (!editor) continue;
 
         SessionTab tab;
         tab.filePath = editor->property("filePath").toString();
         
-        // Only save if it has a path (ignore empty unsaved tabs unless we add autosave later)
+        // Only save if it has a path
         if (tab.filePath.isEmpty()) continue;
 
         tab.cursorLine = editor->textCursor().blockNumber();
@@ -906,19 +947,8 @@ void MainWindow::restoreSessionAsync()
     // Check for recovery files
     QStringList recoveries = m_autosaveManager->getAvailableRecoveries();
     if (!recoveries.isEmpty()) {
-        QMessageBox msgBox(this);
-        msgBox.setWindowTitle(tr("Session Recovery"));
-        msgBox.setText(tr("NanoMark found unsaved recovery files."));
-        msgBox.setInformativeText(tr("Would you like to restore your previous session?"));
-        
-        QPushButton *restoreBtn = msgBox.addButton(tr("Restore Session"), QMessageBox::AcceptRole);
-        QPushButton *discardBtn = msgBox.addButton(tr("Discard"), QMessageBox::RejectRole);
-        Q_UNUSED(discardBtn);
-        
-        msgBox.exec();
-        
-        if (msgBox.clickedButton() == restoreBtn) {
-            // Restore from recovery files
+        try {
+            // ALWAYS restore from recovery files automatically without prompt dialogs!
             for (const QString &recPath : recoveries) {
                 // Read recovery file
                 QFile file(recPath);
@@ -951,15 +981,15 @@ void MainWindow::restoreSessionAsync()
                     }
                 }
             }
+        } catch (...) {
+            Logger::instance().error("Failed to restore recovery files, starting clean session...");
         }
-        // Either way, clean up the old recoveries once handled
-        m_autosaveManager->discardAllRecoveries();
         
-        // Skip normal tab restore if we recovered
-        if (msgBox.clickedButton() == restoreBtn) {
-            updateWorkspaceVisibility();
-            return;
-        }
+        // Clean up the old recoveries once handled
+        m_autosaveManager->discardAllRecoveries();
+        updateWorkspaceVisibility();
+        schedulePreviewUpdate();
+        return;
     }
 
     if (tabs.isEmpty()) {
@@ -994,6 +1024,7 @@ void MainWindow::restoreSessionAsync()
             m_tabWidget->setCurrentIndex(activeIdx);
         }
         updateWorkspaceVisibility();
+        schedulePreviewUpdate();
     }
 }
 
@@ -1001,9 +1032,9 @@ void MainWindow::restoreSessionAsync()
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-    // Check all tabs for unsaved changes
-    for (int i = 0; i < m_tabWidget->count(); ++i) {
-        auto *editor = qobject_cast<Editor*>(m_tabWidget->widget(i));
+    // Check all tabs for unsaved changes using authoritative tab manager
+    for (int i = 0; i < m_tabManager->count(); ++i) {
+        auto *editor = m_tabManager->editorAt(i);
         if (editor && editor->document()->isModified()) {
             m_tabWidget->setCurrentIndex(i);
             auto ret = QMessageBox::question(this, tr("Unsaved Changes"),

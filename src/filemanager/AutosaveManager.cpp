@@ -17,9 +17,13 @@ namespace NanoMark {
 AutosaveManager::AutosaveManager(QObject *parent)
     : QObject(parent)
     , m_timer(new QTimer(this))
+    , m_debounceTimer(new QTimer(this))
 {
     connect(m_timer, &QTimer::timeout, this, &AutosaveManager::processAutosaves);
     m_timer->start(AUTOSAVE_INTERVAL_MS);
+    
+    m_debounceTimer->setSingleShot(true);
+    connect(m_debounceTimer, &QTimer::timeout, this, &AutosaveManager::processAutosaves);
     
     QDir().mkpath(autosaveDirectory());
 }
@@ -55,6 +59,7 @@ void AutosaveManager::markDirty(Editor *editor)
 {
     if (m_watchedEditors.contains(editor)) {
         m_watchedEditors[editor].isDirty = true;
+        m_debounceTimer->start(200); // 200ms debounce: triggers autosave instantly when you pause typing!
     }
 }
 

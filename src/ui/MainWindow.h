@@ -27,6 +27,7 @@ class ThemeManager;
 class AutosaveManager;
 class Dashboard;
 class CommandPalette;
+class TabManager;
 
 class MainWindow : public QMainWindow
 {
@@ -67,6 +68,7 @@ private slots:
     void onShowQuickOpen();
     void onFindReplace();
     void onSidebarFileClicked(const QModelIndex &index);
+    void onOutlineHeadingClicked(const QModelIndex &index);
     void restoreSessionAsync();
 
 private:
@@ -112,6 +114,7 @@ private:
     std::unique_ptr<WorkspaceManager> m_workspaceManager;
     std::unique_ptr<StudyMode> m_studyMode;
     std::unique_ptr<AutosaveManager> m_autosaveManager;
+    std::unique_ptr<TabManager> m_tabManager;
 
     QTimer *m_renderTimer = nullptr;
     bool m_isStudyMode = false;

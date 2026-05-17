@@ -101,7 +101,7 @@ void PreviewPane::initWebEngine()
         }
     });
 
-    function updateContent(html, isDark, css) {
+    window.updateContent = function(html, isDark, css) {
         // Validation check
         var contentDiv = document.getElementById("content");
         if (!contentDiv) {
@@ -126,10 +126,12 @@ void PreviewPane::initWebEngine()
         
         contentDiv.innerHTML = html;
         
-        // Re-run highlighting
-        document.querySelectorAll('pre code').forEach((el) => {
-            hljs.highlightElement(el);
-        });
+        // Re-run highlighting if highlight.js loaded successfully
+        if (typeof hljs !== 'undefined') {
+            document.querySelectorAll('pre code').forEach((el) => {
+                hljs.highlightElement(el);
+            });
+        }
 
         // Restore scroll percentage after DOM update
         var doc = document.documentElement;
@@ -196,12 +198,14 @@ void PreviewPane::onLoadFinished(bool ok)
                 
                 // Execute pending update if any
                 if (m_hasPendingUpdate) {
+                    m_lastHtmlBody.clear(); // Force injection on handshake success
                     updatePreview(m_pendingUpdate.htmlBody, m_pendingUpdate.isDark, m_pendingUpdate.css);
                     m_hasPendingUpdate = false;
                 }
 
                 // Push legacy queued HTML now that we are ready
                 if (!m_pendingHtml.isEmpty()) {
+                    m_lastHtml.clear(); // Force injection on handshake success
                     setHtml(m_pendingHtml);
                     m_pendingHtml.clear();
                 }
@@ -217,7 +221,7 @@ PreviewPane::~PreviewPane() = default;
 
 void PreviewPane::setHtml(const QString &html)
 {
-    if (html == m_lastHtml) return;
+    if (m_state == PreviewState::Ready && html == m_lastHtml) return;
     m_lastHtml = html;
 
     if (m_state == PreviewState::Placeholder) {
@@ -247,7 +251,7 @@ void PreviewPane::setHtml(const QString &html)
 
 void PreviewPane::updatePreview(const QString &htmlBody, bool isDark, const QString &css)
 {
-    if (htmlBody == m_lastHtmlBody) return;
+    if (m_state == PreviewState::Ready && htmlBody == m_lastHtmlBody) return;
     m_lastHtmlBody = htmlBody;
 
     if (m_state == PreviewState::Placeholder) {
