@@ -453,6 +453,16 @@ void MainWindow::createNewTab(const QString &title, const QString &content)
             this, &MainWindow::onEditorTextChanged);
     connect(editor, &QPlainTextEdit::cursorPositionChanged,
             this, &MainWindow::schedulePreviewUpdate);
+    connect(editor->verticalScrollBar(), &QScrollBar::valueChanged, this, [this, editor]() {
+        if (editor == currentEditor() && m_previewPane->isVisible()) {
+            QScrollBar *vBar = editor->verticalScrollBar();
+            double percent = 0.0;
+            if (vBar->maximum() > 0) {
+                percent = static_cast<double>(vBar->value()) / vBar->maximum();
+            }
+            m_previewPane->scrollToPercentage(percent);
+        }
+    });
 
     int idx = m_tabWidget->addTab(editor, title);
     m_tabWidget->setCurrentIndex(idx);

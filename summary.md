@@ -121,11 +121,10 @@ tests/         CMakeLists.txt, test_renderer.cpp
 - **Ready-Gated Cache Verification & Handshake Clear**: Solved initialization caching bugs by gating HTML comparison checks on `m_state == PreviewState::Ready`, and proactively clearing `m_lastHtmlBody` right before executing handshake pending updates, ensuring document-load injections always run flawlessly.
 - **Offline Highlight Safety**: Added checks to prevent JS failures if highlight.js CDN stylesheets are offline.
 
-### Asynchronous Session Restoration (Phase 3.4 Startup Upgrade)
-- **Authoritative TabManager Sync**: Standardized all session saving (`saveWindowState`) and closing (`closeEvent`) routines to query the authoritative model tracker `TabManager` directly, resolving raw QTabWidget widget desyncs.
-- **Deferred tab restores**: To achieve sub-50ms cold boots, `MainWindow` loads the dashboard, settings, and workspace geometry synchronously, and then schedules all recovery/tab restoration work asynchronously via `QTimer::singleShot(0, ...)`. Tabs load progressively in the background without blocking the UI thread.
+- **Asynchronous Session Restoration & Autorestore**: Bypassed dialog prompts to **always restore** recovery documents automatically on startup. Protected by try-catch blocks to safely open a clean workspace on read failures.
 - **Continuous Document Outline**: Pulled heading generation outside of cache dirty checks so outlines rebuild instantly on tab swap and cold boot. Shows a dim/italic `"No headings found"` placeholder row when headers are empty.
 - **Interactive Outline Navigation**: Connected the `QTreeView` outline items to scroll the editor by block-by-line using stored `lineNumber` and native `QTextBlock` APIs.
+- **Real-Time Preview Scroll Sync**: Synchronizes the vertical scroll position of the Markdown Editor to the HTML Preview panel in real-time using scrollbar percentage tracking and JS viewport scroll hooks.
 - **Premium Stylings**: Integrated opaque editor composition overlays, raised text contrast to `#f8f9fa` for superb readability, added dark-contrasted selected tab active states, and enforced solid `#2a2a2a` borders throughout the global `dark.qss` layout.
 
 ---

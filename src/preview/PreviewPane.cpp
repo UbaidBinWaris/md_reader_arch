@@ -101,6 +101,15 @@ void PreviewPane::initWebEngine()
         }
     });
 
+    window.scrollToPercentage = function(percent) {
+        var doc = document.documentElement;
+        var total = doc.scrollHeight - doc.clientHeight;
+        if (total > 0) {
+            doc.scrollTop = percent * total;
+            lastScrollPercent = percent;
+        }
+    };
+
     window.updateContent = function(html, isDark, css) {
         // Validation check
         var contentDiv = document.getElementById("content");
@@ -300,6 +309,13 @@ void PreviewPane::updatePreview(const QString &htmlBody, bool isDark, const QStr
             Logger::instance().warning("PreviewPane: DOM innerHTML swap returned false or failed.");
         }
     });
+}
+
+void PreviewPane::scrollToPercentage(double percentage)
+{
+    if (m_state != PreviewState::Ready) return;
+    QString jsCall = QString("scrollToPercentage(%1);").arg(percentage);
+    m_webView->page()->runJavaScript(jsCall);
 }
 
 void PreviewPane::exportToPDF(const QString &filePath, const QString &html)
