@@ -1,4 +1,4 @@
-# NanoMark — Technical Summary (Phase 3 Updated)
+# NanoMark — Technical Summary (Phase 3.1 Stabilization Updated)
 
 ## Overview
 NanoMark is a C++20/Qt6 desktop markdown editor and study workspace.
@@ -34,9 +34,10 @@ tests/         CMakeLists.txt, test_renderer.cpp
 
 ## Module 1: core — Application & Infrastructure
 
-### Application.cpp
+### Application.cpp & main.cpp
 - Initializes **ErrorHandler**, **SettingsService**, and **ThemeManager**.
 - Creates the primary **MainWindow** via **WindowManager**.
+- **Phase 3.1**: Sets global window icon (`logo.svg`) and silences Linux Chromium Vulkan/GPU warnings via `qputenv`.
 
 ### SettingsService.h / .cpp
 - **Engine**: SQLite 3 (`nanomark.db`).
@@ -65,14 +66,16 @@ tests/         CMakeLists.txt, test_renderer.cpp
 - **Context Menu**: "Close", "Close Others", "Close All".
 - **State**: Tracks modified status with "•" indicators.
 
-### Dashboard.h / .cpp (New in Phase 3)
+### Dashboard.h / .cpp (Redesigned in Phase 3.1)
 - **Welcome Screen**: Beautiful welcome dashboard displayed when no files are open.
-- **Features**: Recent documents list, Quick Start actions (New File, Open File, Open Folder).
+- **Design**: Premium VS Code / ChatGPT aesthetic adhering strictly to a 4px spacing grid.
+- **Features**: Recent documents list, Quick Start actions, Pinned placeholders, and Tips/Shortcuts.
 
 ### MainWindow.cpp (Upgraded)
 - Now acts as a coordinator between `TabManager`, `WorkspaceManager`, `PreviewPane`, and `Dashboard`.
 - **Status Bar Upgrades**: Dynamic "Read Time" (200 wpm calculation) and "File Size" formatting (KB/MB).
 - Contextually hides Line/Col information in Study Mode.
+- **Phase 3.1 Fixes**: Explicitly sets `setObjectName()` on docks and splitters to guarantee robust layout persistence (`saveState()`/`restoreState()`). Includes a `QMessageBox` on startup to recover unsaved `.autosave` sessions.
 
 ---
 
@@ -105,9 +108,11 @@ tests/         CMakeLists.txt, test_renderer.cpp
 
 ## Module 5: filemanager — Autosave & File I/O
 
-### AutosaveManager.h / .cpp (New in Phase 3)
-- **Background Autosave**: Periodically creates `.bak` files using MD5-hashed names in `~/Documents/NanoMark/Autosave/`.
-- **Frequency**: Every 30 seconds for active modified documents.
+### AutosaveManager.h / .cpp (Overhauled in Phase 3.1)
+- **Background Autosave**: Periodically creates `.autosave` files using generated **UUIDs** (e.g., `session_<UUID>.autosave`) in `~/Documents/NanoMark/Autosave/`.
+- **Tracking**: Correctly tracks and saves unsaved "Untitled" documents. Connects to `QPlainTextEdit::textChanged`.
+- **Metadata**: Embeds original file paths directly inside the backup file for seamless restoration.
+- **Frequency**: Every 15 seconds for actively modified documents.
 - **Cleanup**: Removes backup files upon successful manual save or clean close.
 
 ---
