@@ -16,6 +16,7 @@
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QRegularExpression>
+#include <QAbstractItemView>
 
 namespace NanoMark {
 
@@ -53,11 +54,38 @@ Editor::Editor(QWidget *parent)
     setWordWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
     setCursorWidth(2);
 
-    // Smooth scrolling
+    // Smooth scrolling & Repaint optimizations
     verticalScrollBar()->setSingleStep(3);
+    setCenterOnScroll(false);
+    viewport()->setAttribute(Qt::WA_OpaquePaintEvent);
+
+    connect(this, &QPlainTextEdit::textChanged, this, [this]() {
+        m_htmlDirty = true;
+    });
 }
 
 Editor::~Editor() = default;
+
+void Editor::setCachedHtml(const QString &html)
+{
+    m_cachedHtml = html;
+    m_htmlDirty = false;
+}
+
+QString Editor::cachedHtml() const
+{
+    return m_cachedHtml;
+}
+
+bool Editor::isHtmlDirty() const
+{
+    return m_htmlDirty;
+}
+
+void Editor::markHtmlClean()
+{
+    m_htmlDirty = false;
+}
 
 // ─── Formatting Helpers ────────────────────────────────────────────────────────
 

@@ -67,6 +67,7 @@ private slots:
     void onShowQuickOpen();
     void onFindReplace();
     void onSidebarFileClicked(const QModelIndex &index);
+    void restoreSessionAsync();
 
 private:
     void setupUI();

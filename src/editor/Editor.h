@@ -35,6 +35,12 @@ public:
     /** Line number area width */
     int lineNumberAreaWidth() const;
 
+    /** HTML caching for fast tab switching */
+    void setCachedHtml(const QString &html);
+    QString cachedHtml() const;
+    bool isHtmlDirty() const;
+    void markHtmlClean();
+
 protected:
     void resizeEvent(QResizeEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
@@ -51,6 +57,9 @@ private:
     MarkdownHighlighter *m_highlighter = nullptr;
     QWidget *m_lineNumberArea = nullptr;
     QWidget *m_findReplaceBar = nullptr;
+
+    QString m_cachedHtml;
+    bool m_htmlDirty = true;
 };
 
 // ─── Line Number Area Widget ───────────────────────────────────────────────────

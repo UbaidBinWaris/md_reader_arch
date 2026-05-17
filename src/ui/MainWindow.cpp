@@ -446,7 +446,7 @@ void MainWindow::createNewTab(const QString &title, const QString &content)
     connect(editor, &QPlainTextEdit::textChanged,
             this, &MainWindow::onEditorTextChanged);
     connect(editor, &QPlainTextEdit::cursorPositionChanged,
-            this, &MainWindow::updateStatusBar);
+            this, &MainWindow::schedulePreviewUpdate);
 
     int idx = m_tabWidget->addTab(editor, title);
     m_tabWidget->setCurrentIndex(idx);
@@ -737,31 +737,43 @@ void MainWindow::onSidebarFileClicked(const QModelIndex &index)
 
 void MainWindow::schedulePreviewUpdate()
 {
-    if (m_isStudyMode || !m_previewPane->isVisible()) return;
+    if (m_isStudyMode || !m_previewPane->isVisible()) {
+        m_renderTimer->start(250); // Still need it for status bar updates
+        return;
+    }
     m_renderTimer->start(250);
 }
 
 void MainWindow::updatePreview()
 {
+    // Always update status bar on the debounced tick
+    updateStatusBar();
+
     if (m_isStudyMode || !m_previewPane->isVisible()) return;
 
     auto *editor = currentEditor();
     if (!editor) return;
 
-    QString markdown = editor->toPlainText();
-    QString html = m_renderer->render(markdown);
-    m_previewPane->setHtml(html);
+    if (editor->isHtmlDirty()) {
+        QString markdown = editor->toPlainText();
+        QString html = m_renderer->render(markdown);
+        editor->setCachedHtml(html);
+        m_previewPane->setHtml(html);
 
-    // Update outline
-    auto headings = m_renderer->extractHeadings(markdown);
-    auto *model = qobject_cast<QStandardItemModel*>(m_outlineView->model());
-    if (model) {
-        model->clear();
-        for (const auto &h : headings) {
-            auto *item = new QStandardItem(QString("  ").repeated(h.level - 1) + h.text);
-            item->setEditable(false);
-            model->appendRow(item);
+        // Update outline
+        auto headings = m_renderer->extractHeadings(markdown);
+        auto *model = qobject_cast<QStandardItemModel*>(m_outlineView->model());
+        if (model) {
+            model->clear();
+            for (const auto &h : headings) {
+                auto *item = new QStandardItem(QString("  ").repeated(h.level - 1) + h.text);
+                item->setEditable(false);
+                model->appendRow(item);
+            }
         }
+    } else {
+        // Cache hit! Instant rendering skip
+        m_previewPane->setHtml(editor->cachedHtml());
     }
 }
 

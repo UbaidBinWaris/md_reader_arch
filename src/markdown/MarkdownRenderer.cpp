@@ -36,6 +36,11 @@ QString MarkdownRenderer::render(const QString &markdown) const
           htmlBody);
 }
 
+QString MarkdownRenderer::renderBody(const QString &markdown) const
+{
+    return markdownToHtml(markdown);
+}
+
 QString MarkdownRenderer::renderStandalone(const QString &markdown) const
 {
     return render(markdown);
