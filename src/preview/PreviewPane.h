@@ -35,6 +35,9 @@ public:
     /** Export current content to PDF */
     void exportToPDF(const QString &filePath, const QString &html);
 
+protected:
+    bool eventFilter(QObject *obj, QEvent *event) override;
+
 private slots:
     void onLoadFinished(bool ok);
     void onLoadStarted();

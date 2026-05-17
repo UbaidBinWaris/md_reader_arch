@@ -18,6 +18,11 @@
 #include <QJsonDocument>
 #include <QJsonArray>
 #include "Logger.h"
+#include "MainWindow.h"
+#include "Editor.h"
+#include <QApplication>
+#include <QWheelEvent>
+#include <QScrollBar>
 
 namespace NanoMark {
 
@@ -65,6 +70,7 @@ void PreviewPane::initWebEngine()
     connect(m_webView, &QWebEngineView::loadFinished, this, &PreviewPane::onLoadFinished);
     
     m_layout->addWidget(m_webView);
+    installScrollFilterRecursive(m_webView, this);
     
     // Bootstrap the HTML shell ONCE
     QString shellHtml = R"(
@@ -79,6 +85,14 @@ void PreviewPane::initWebEngine()
         font-family: Inter, system-ui, sans-serif;
         margin: 20px;
         line-height: 1.75;
+    }
+    /* Hide scrollbars completely to achieve unified scroll layouts */
+    ::-webkit-scrollbar {
+        display: none;
+    }
+    html {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
     }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" id="hljs-style">
@@ -182,6 +196,8 @@ void PreviewPane::onLoadFinished(bool ok)
 
         if (!m_fallbackBrowser) {
             m_fallbackBrowser = new QTextBrowser(this);
+            m_fallbackBrowser->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+            m_fallbackBrowser->installEventFilter(this);
             m_fallbackBrowser->setStyleSheet("background: #0d0d0d; color: #e3e3e3; border: none; font-family: Inter, sans-serif; font-size: 14px; padding: 20px;");
             m_layout->addWidget(m_fallbackBrowser);
         }
@@ -247,6 +263,8 @@ void PreviewPane::setHtml(const QString &html)
     if (m_state == PreviewState::Failed) {
         if (!m_fallbackBrowser) {
             m_fallbackBrowser = new QTextBrowser(this);
+            m_fallbackBrowser->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+            m_fallbackBrowser->installEventFilter(this);
             m_fallbackBrowser->setStyleSheet("background: #0d0d0d; color: #e3e3e3; border: none; font-family: Inter, sans-serif; font-size: 14px; padding: 20px;");
             m_layout->addWidget(m_fallbackBrowser);
             m_layout->setCurrentWidget(m_fallbackBrowser);
@@ -279,6 +297,8 @@ void PreviewPane::updatePreview(const QString &htmlBody, bool isDark, const QStr
     if (m_state == PreviewState::Failed) {
         if (!m_fallbackBrowser) {
             m_fallbackBrowser = new QTextBrowser(this);
+            m_fallbackBrowser->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+            m_fallbackBrowser->installEventFilter(this);
             m_fallbackBrowser->setStyleSheet(isDark ? 
                 "background: #0d0d0d; color: #e3e3e3; border: none; font-family: Inter, sans-serif; font-size: 14px; padding: 20px;" :
                 "background: #ffffff; color: #1a1a1a; border: none; font-family: Inter, sans-serif; font-size: 14px; padding: 20px;");
@@ -341,6 +361,33 @@ void PreviewPane::exportToPDF(const QString &filePath, const QString &html)
         // Clean up after a delay
         QTimer::singleShot(5000, exportPage, &QObject::deleteLater);
     });
+}
+
+static void installScrollFilterRecursive(QObject *obj, QObject *filter) {
+    if (!obj) return;
+    obj->installEventFilter(filter);
+    for (QObject *child : obj->children()) {
+        installScrollFilterRecursive(child, filter);
+    }
+}
+
+bool PreviewPane::eventFilter(QObject *obj, QEvent *event)
+{
+    if (event->type() == QEvent::Wheel) {
+        QWidget *p = parentWidget();
+        while (p) {
+            if (MainWindow *mw = qobject_cast<MainWindow*>(p)) {
+                if (auto *editor = mw->currentEditor()) {
+                    QWheelEvent *wheelEvent = static_cast<QWheelEvent*>(event);
+                    QApplication::sendEvent(editor->verticalScrollBar(), wheelEvent);
+                    return true;
+                }
+                break;
+            }
+            p = p->parentWidget();
+        }
+    }
+    return QWidget::eventFilter(obj, event);
 }
 
 } // namespace NanoMark
