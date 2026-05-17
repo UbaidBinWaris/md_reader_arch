@@ -11,6 +11,7 @@
 class QWebEngineView;
 class QStackedLayout;
 class QLabel;
+class QTextBrowser;
 
 namespace NanoMark {
 
@@ -50,6 +51,7 @@ private:
     QStackedLayout *m_layout = nullptr;
     QLabel *m_placeholder = nullptr;
     QWebEngineView *m_webView = nullptr;
+    QTextBrowser *m_fallbackBrowser = nullptr;
     QString m_lastHtml;
     QString m_pendingHtml;
 

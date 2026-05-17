@@ -57,7 +57,16 @@ Editor::Editor(QWidget *parent)
     // Smooth scrolling & Repaint optimizations
     verticalScrollBar()->setSingleStep(3);
     setCenterOnScroll(false);
-    viewport()->setAttribute(Qt::WA_OpaquePaintEvent);
+    
+    // Force Opaque background to resolve compositor transparency/bleed-through bugs
+    viewport()->setAttribute(Qt::WA_OpaquePaintEvent, true);
+    viewport()->setAutoFillBackground(true);
+    QPalette p = viewport()->palette();
+    p.setColor(QPalette::Base, QColor("#0d0d0d"));
+    p.setColor(QPalette::Text, QColor("#e3e3e3")); // Premium text styling contrast
+    viewport()->setPalette(p);
+    
+    setFrameStyle(QFrame::NoFrame);
 
     connect(this, &QPlainTextEdit::textChanged, this, [this]() {
         m_htmlDirty = true;

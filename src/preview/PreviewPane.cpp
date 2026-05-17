@@ -14,6 +14,7 @@
 #include <QTimer>
 #include <QStackedLayout>
 #include <QLabel>
+#include <QTextBrowser>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include "Logger.h"
@@ -83,6 +84,12 @@ void PreviewPane::initWebEngine()
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" id="hljs-style">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script>
+    // Global error tracker
+    window.onerror = function(msg, url, line) {
+        console.error("JS ERROR: " + msg + " at " + url + ":" + line);
+        return false;
+    };
+
     var lastScrollPercent = 0;
     
     // Track scroll position in shell
@@ -95,6 +102,13 @@ void PreviewPane::initWebEngine()
     });
 
     function updateContent(html, isDark, css) {
+        // Validation check
+        var contentDiv = document.getElementById("content");
+        if (!contentDiv) {
+            console.error("DOM not ready: #content div not found!");
+            return false;
+        }
+
         document.body.className = isDark ? "dark" : "light";
         document.body.style.backgroundColor = isDark ? "#0d0d0d" : "#ffffff";
         document.body.style.color = isDark ? "#e3e3e3" : "#1a1a1a";
@@ -110,7 +124,6 @@ void PreviewPane::initWebEngine()
                       (isDark ? "atom-one-dark" : "atom-one-light") + ".min.css";
         }
         
-        var contentDiv = document.getElementById("content");
         contentDiv.innerHTML = html;
         
         // Re-run highlighting
@@ -124,7 +137,11 @@ void PreviewPane::initWebEngine()
         if (total > 0) {
             doc.scrollTop = lastScrollPercent * total;
         }
+        return true;
     }
+
+    // Set handshake ready
+    window.nanoMarkReady = true;
     </script>
     </head>
     <body class="dark" style="background-color: #0d0d0d;">
@@ -149,28 +166,50 @@ void PreviewPane::onLoadProgress(int /*progress*/)
 void PreviewPane::onLoadFinished(bool ok)
 {
     if (!ok) {
-        Logger::instance().error("PreviewPane: Load failed");
+        Logger::instance().error("PreviewPane: Load failed. Falling back to QTextBrowser...");
         m_state = PreviewState::Failed;
+
+        if (!m_fallbackBrowser) {
+            m_fallbackBrowser = new QTextBrowser(this);
+            m_fallbackBrowser->setStyleSheet("background: #0d0d0d; color: #e3e3e3; border: none; font-family: Inter, sans-serif; font-size: 14px; padding: 20px;");
+            m_layout->addWidget(m_fallbackBrowser);
+        }
+        
+        m_layout->setCurrentWidget(m_fallbackBrowser);
+        
+        if (m_hasPendingUpdate) {
+            m_fallbackBrowser->setHtml(m_pendingUpdate.htmlBody);
+        } else if (!m_pendingHtml.isEmpty()) {
+            m_fallbackBrowser->setHtml(m_pendingHtml);
+        }
         return;
     }
 
     if (m_state == PreviewState::Initializing) {
-        Logger::instance().info("PreviewPane: Initialization complete. Persistent WebEngine Ready.");
-        m_state = PreviewState::Ready;
-        m_shellLoaded = true;
-        m_layout->setCurrentWidget(m_webView); // Swap placeholder -> WebEngine
-        
-        // Execute pending update if any
-        if (m_hasPendingUpdate) {
-            updatePreview(m_pendingUpdate.htmlBody, m_pendingUpdate.isDark, m_pendingUpdate.css);
-            m_hasPendingUpdate = false;
-        }
+        // Timing handshake: ensure JavaScript bootstrap has completed execution
+        m_webView->page()->runJavaScript("window.nanoMarkReady === true", [this](const QVariant &ready) {
+            if (ready.toBool()) {
+                Logger::instance().info("PreviewPane: Handshake successful. Persistent WebEngine Ready.");
+                m_state = PreviewState::Ready;
+                m_shellLoaded = true;
+                m_layout->setCurrentWidget(m_webView); // Swap placeholder -> WebEngine
+                
+                // Execute pending update if any
+                if (m_hasPendingUpdate) {
+                    updatePreview(m_pendingUpdate.htmlBody, m_pendingUpdate.isDark, m_pendingUpdate.css);
+                    m_hasPendingUpdate = false;
+                }
 
-        // Push legacy queued HTML now that we are ready
-        if (!m_pendingHtml.isEmpty()) {
-            setHtml(m_pendingHtml);
-            m_pendingHtml.clear();
-        }
+                // Push legacy queued HTML now that we are ready
+                if (!m_pendingHtml.isEmpty()) {
+                    setHtml(m_pendingHtml);
+                    m_pendingHtml.clear();
+                }
+            } else {
+                Logger::instance().warning("PreviewPane: Handshake not ready yet. Retrying in 10ms...");
+                QTimer::singleShot(10, this, [this]() { onLoadFinished(true); });
+            }
+        });
     }
 }
 
@@ -193,6 +232,13 @@ void PreviewPane::setHtml(const QString &html)
     }
 
     if (m_state == PreviewState::Failed) {
+        if (!m_fallbackBrowser) {
+            m_fallbackBrowser = new QTextBrowser(this);
+            m_fallbackBrowser->setStyleSheet("background: #0d0d0d; color: #e3e3e3; border: none; font-family: Inter, sans-serif; font-size: 14px; padding: 20px;");
+            m_layout->addWidget(m_fallbackBrowser);
+            m_layout->setCurrentWidget(m_fallbackBrowser);
+        }
+        m_fallbackBrowser->setHtml(html);
         return;
     }
 
@@ -218,6 +264,16 @@ void PreviewPane::updatePreview(const QString &htmlBody, bool isDark, const QStr
     }
 
     if (m_state == PreviewState::Failed) {
+        if (!m_fallbackBrowser) {
+            m_fallbackBrowser = new QTextBrowser(this);
+            m_fallbackBrowser->setStyleSheet(isDark ? 
+                "background: #0d0d0d; color: #e3e3e3; border: none; font-family: Inter, sans-serif; font-size: 14px; padding: 20px;" :
+                "background: #ffffff; color: #1a1a1a; border: none; font-family: Inter, sans-serif; font-size: 14px; padding: 20px;");
+            m_layout->addWidget(m_fallbackBrowser);
+            m_layout->setCurrentWidget(m_fallbackBrowser);
+        }
+        m_fallbackBrowser->setHtml(QString("<html><head><style>%1</style></head><body class='%2'>%3</body></html>")
+            .arg(css, isDark ? "dark" : "light", htmlBody));
         return;
     }
 
@@ -233,7 +289,13 @@ void PreviewPane::updatePreview(const QString &htmlBody, bool isDark, const QStr
         .arg(isDark ? "true" : "false")
         .arg(escapedCss);
 
-    m_webView->page()->runJavaScript(jsCall);
+    m_webView->page()->runJavaScript(jsCall, [](const QVariant &res) {
+        if (res.toBool()) {
+            Logger::instance().info("PreviewPane: DOM innerHTML swap executed successfully.");
+        } else {
+            Logger::instance().warning("PreviewPane: DOM innerHTML swap returned false or failed.");
+        }
+    });
 }
 
 void PreviewPane::exportToPDF(const QString &filePath, const QString &html)

@@ -108,6 +108,9 @@ tests/         CMakeLists.txt, test_renderer.cpp
 
 ### Preview Performance (Phase 3.4 Stabilization & Caching)
 - **Persistent HTML Shell & innerHTML Swap**: Instead of calling `setHtml()` repeatedly, which reloads Chromium entirely and causes white flashes, `PreviewPane` bootstraps a static HTML shell *once*. Subsequent rendering updates are executed using high-speed JavaScript `innerHTML` swaps via safe `QJsonDocument` string serialization. This preserves DOM states, scroll positions, and reduces CPU rendering overhead to near zero.
+- **Timing-Safe JavaScript Handshake**: Handled race conditions by checking `window.nanoMarkReady === true` via a C++ deferred polling handshake loop inside `onLoadFinished()`. Guarantees JS functions are fully parsed and live before content injection starts.
+- **QTextBrowser Fallback Engine**: If Chromium fails, crashes, or is unavailable in the host sandbox environment, rendering automatically hot-swaps to a native, theme-harmonized `QTextBrowser` widget, preventing blank preview states.
+- **Robust Exception Logging**: Connected a global `window.onerror` catch block in the JS shell to route runtime scripting errors directly to developer logs via a `runJavaScript` logging callback.
 - **Opaque Dark Paint Override**: Completely eliminated white rendering flashes. Sets `Qt::WA_OpaquePaintEvent` false, overrides Chromium's background directly to `#0d0d0d`, and embeds immediate CSS background styling into the bootstrap shell.
 - **Deferred Initialization**: The heavy Chromium WebEngine is instantiated *only* when the preview is opened/visible, cutting idle memory footprint drastically.
 - **Debounced Rendering**: Preview updates use a 250ms debounce timer to combine status updates and rendering pipelines during active typing.

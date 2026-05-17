@@ -396,6 +396,7 @@ void MainWindow::setupSidebar()
 
     // Document Outline sidebar
     m_outlineDock = new QDockWidget(tr("Outline"), this);
+    m_outlineDock->setObjectName("OutlineDock");
     m_outlineDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
     m_outlineDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
 
@@ -874,6 +875,12 @@ void MainWindow::restoreWindowState()
     restoreGeometry(ss.restoreWindowGeometry());
     restoreState(ss.restoreWindowState());
     m_splitter->restoreState(ss.restoreSplitterState());
+
+    // Validate splitter sizes to prevent 0-width panel collapses
+    QList<int> splitterSizes = m_splitter->sizes();
+    if (splitterSizes.size() < 2 || splitterSizes[0] < 50 || splitterSizes[1] < 50) {
+        m_splitter->setSizes({600, 600});
+    }
 
     // Restore workspace
     QString lastWs = ss.lastWorkspace();
