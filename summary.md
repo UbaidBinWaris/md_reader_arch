@@ -79,9 +79,10 @@ tests/         CMakeLists.txt, test_renderer.cpp
 
 ### MainWindow.cpp (Upgraded)
 - Now acts as a coordinator between `TabManager`, `WorkspaceManager`, `PreviewPane`, and `Dashboard`.
-- **Status Bar Upgrades**: Dynamic "Read Time" (200 wpm calculation) and "File Size" formatting (KB/MB).
+- **Status Bar Upgrades**: Dynamic "Read Time" (200 wpm calculation) and "File Size" formatting (KB/MB) running in real-time.
 - Contextually hides Line/Col information in Study Mode.
-- **Phase 3.1 Fixes**: Explicitly sets `setObjectName()` on docks and splitters to guarantee robust layout persistence (`saveState()`/`restoreState()`). Includes a `QMessageBox` on startup to recover unsaved `.autosave` sessions.
+- **Startup Recovery**: Bypasses dialog prompts to **always restore recovery sessions automatically** on startup, backed by try-catch fallback structures to open a clean workspace on database/file read failures.
+- **Interactive Outline & Scroll Sync**: Coordinates two-way scroll synchronization, promptless startup recoveries, and active reading section tracking. Exposes the viewport-top scroll alignment logic (`setValue(maximum())` followed by `ensureCursorVisible()`) to scroll editor text perfectly to the top edge on heading double-clicks.
 
 ---
 
@@ -91,6 +92,7 @@ tests/         CMakeLists.txt, test_renderer.cpp
 - **Theme**: Harmonized with deep black `#0d0d0d` background.
 - **Line Numbers**: Dynamic coloring (highlighted current line).
 - **Behavior**: Auto-indentation, list continuation, 4-space tabs.
+- **Public API**: Exposes `firstVisibleBlock()` publicly to support active outline section reading tracking.
 
 ### MarkdownHighlighter.cpp
 - **Visuals**: One Dark Modern regex rules.
