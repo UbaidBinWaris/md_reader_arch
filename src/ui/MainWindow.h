@@ -26,6 +26,7 @@ class StudyMode;
 class ThemeManager;
 class AutosaveManager;
 class Dashboard;
+class CommandPalette;
 
 class MainWindow : public QMainWindow
 {
@@ -63,6 +64,7 @@ private slots:
     void onToggleTheme();
     void onShowAbout();
     void onShowCommandPalette();
+    void onShowQuickOpen();
     void onFindReplace();
     void onSidebarFileClicked(const QModelIndex &index);
 
@@ -88,6 +90,7 @@ private:
     QTabWidget *m_tabWidget = nullptr;
     Dashboard *m_dashboard = nullptr;
     PreviewPane *m_previewPane = nullptr;
+    CommandPalette *m_commandPalette = nullptr;
     QDockWidget *m_sidebarDock = nullptr;
     QTreeView *m_fileTreeView = nullptr;
     QDockWidget *m_outlineDock = nullptr;

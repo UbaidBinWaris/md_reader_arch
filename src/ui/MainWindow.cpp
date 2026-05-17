@@ -14,6 +14,7 @@
 #include "SettingsService.h"
 #include "AutosaveManager.h"
 #include "Dashboard.h"
+#include "CommandPalette.h"
 #include "Logger.h"
 
 #include <QMenuBar>
@@ -119,6 +120,29 @@ void MainWindow::setupUI()
 
     setCentralWidget(m_stack);
     updateWorkspaceVisibility();
+
+    // Initialize Command Palette overlay
+    m_commandPalette = new CommandPalette(this);
+    connect(m_commandPalette, &CommandPalette::itemSelected, this, [this](const QVariant &data) {
+        QString action = data.toString();
+        if (action.startsWith("cmd:")) {
+            QString cmd = action.mid(4);
+            if (cmd == "new") onNewFile();
+            else if (cmd == "open") onOpenFile();
+            else if (cmd == "save") onSaveFile();
+            else if (cmd == "save_as") onSaveFileAs();
+            else if (cmd == "study") onToggleStudyMode();
+            else if (cmd == "theme") onToggleTheme();
+            else if (cmd == "pdf") onExportPDF();
+            else if (cmd == "html") onExportHTML();
+            else if (cmd == "sidebar") { if (m_sidebarDock) m_sidebarDock->setVisible(!m_sidebarDock->isVisible()); }
+            else if (cmd == "preview") { m_previewPane->setVisible(!m_previewPane->isVisible()); }
+            else if (cmd == "quit") close();
+        } else if (action.startsWith("file:")) {
+            QString path = action.mid(5);
+            openFile(path);
+        }
+    });
 }
 
 void MainWindow::updateWorkspaceVisibility()
@@ -224,10 +248,15 @@ void MainWindow::setupMenuBar()
     });
 
     QAction *togglePreviewAction = viewMenu->addAction(tr("Toggle &Preview"));
-    togglePreviewAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_P));
+    togglePreviewAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V));
     connect(togglePreviewAction, &QAction::triggered, this, [this]() {
         m_previewPane->setVisible(!m_previewPane->isVisible());
     });
+
+    viewMenu->addSeparator();
+
+    QAction *quickOpenAction = viewMenu->addAction(tr("Quick &Open..."), this, &MainWindow::onShowQuickOpen);
+    quickOpenAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_P));
 
     QAction *cmdPaletteAction = viewMenu->addAction(tr("&Command Palette..."), this, &MainWindow::onShowCommandPalette);
     cmdPaletteAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P));
@@ -652,26 +681,37 @@ void MainWindow::onShowAbout()
 
 void MainWindow::onShowCommandPalette()
 {
-    bool ok;
-    QString command = QInputDialog::getText(this, tr("Command Palette"),
-        tr("Enter command:"), QLineEdit::Normal, "", &ok);
+    QList<CommandPalette::ActionItem> items = {
+        {"New File", "Create a blank markdown document", "cmd:new"},
+        {"Open File...", "Browse for a file", "cmd:open"},
+        {"Save", "Save the current document", "cmd:save"},
+        {"Save As...", "Save document as a new file", "cmd:save_as"},
+        {"Toggle Study Mode", "Switch to distraction-free reading", "cmd:study"},
+        {"Toggle Theme", "Switch between Dark and Light themes", "cmd:theme"},
+        {"Toggle Sidebar", "Show or hide the file explorer", "cmd:sidebar"},
+        {"Toggle Preview", "Show or hide the markdown preview", "cmd:preview"},
+        {"Export as PDF", "Save current document as PDF", "cmd:pdf"},
+        {"Export as HTML", "Save current document as HTML", "cmd:html"},
+        {"Quit", "Exit NanoMark", "cmd:quit"}
+    };
 
-    if (!ok || command.isEmpty()) return;
+    m_commandPalette->showOverlay(CommandPalette::CommandMode, items);
+}
 
-    // Basic command handling
-    command = command.toLower().trimmed();
-    if (command == "new" || command == "new file") onNewFile();
-    else if (command == "open") onOpenFile();
-    else if (command == "save") onSaveFile();
-    else if (command == "save as") onSaveFileAs();
-    else if (command == "study" || command == "study mode") onToggleStudyMode();
-    else if (command == "theme" || command == "toggle theme") onToggleTheme();
-    else if (command == "pdf" || command == "export pdf") onExportPDF();
-    else if (command == "html" || command == "export html") onExportHTML();
-    else if (command == "quit" || command == "exit") close();
-    else {
-        statusBar()->showMessage(tr("Unknown command: %1").arg(command), 3000);
+void MainWindow::onShowQuickOpen()
+{
+    QList<CommandPalette::ActionItem> items;
+    
+    // Add recent files
+    auto recent = SettingsService::instance().recentFiles();
+    for (const QString &path : recent) {
+        QFileInfo fi(path);
+        items.append({"📄 " + fi.fileName(), path, "file:" + path});
     }
+
+    // Could add workspace files here by iterating the workspace directory
+
+    m_commandPalette->showOverlay(CommandPalette::QuickOpenMode, items);
 }
 
 void MainWindow::onFindReplace()

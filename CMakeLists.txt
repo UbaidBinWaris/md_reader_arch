@@ -29,6 +29,7 @@ set(SOURCES
     src/ui/TabManager.cpp
     src/ui/WindowManager.cpp
     src/ui/Dashboard.cpp
+    src/ui/CommandPalette.cpp
     src/editor/Editor.cpp
     src/editor/MarkdownHighlighter.cpp
     src/markdown/MarkdownRenderer.cpp
@@ -57,6 +58,7 @@ set(HEADERS
     src/ui/TabManager.h
     src/ui/WindowManager.h
     src/ui/Dashboard.h
+    src/ui/CommandPalette.h
     src/editor/Editor.h
     src/editor/MarkdownHighlighter.h
     src/markdown/MarkdownRenderer.h

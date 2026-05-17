@@ -5,12 +5,16 @@
  * WebEngine-based live preview for rendered markdown
  */
 
-#include <QWebEngineView>
+#include <QWidget>
 #include <QString>
+
+class QWebEngineView;
+class QStackedLayout;
+class QLabel;
 
 namespace NanoMark {
 
-class PreviewPane : public QWebEngineView
+class PreviewPane : public QWidget
 {
     Q_OBJECT
 
@@ -25,6 +29,11 @@ public:
     void exportToPDF(const QString &filePath, const QString &html);
 
 private:
+    void initWebEngine();
+
+    QStackedLayout *m_layout = nullptr;
+    QLabel *m_placeholder = nullptr;
+    QWebEngineView *m_webView = nullptr;
     QString m_lastHtml;
 };
 

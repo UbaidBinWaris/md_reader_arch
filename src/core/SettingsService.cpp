@@ -40,6 +40,10 @@ bool SettingsService::initialize()
         return false;
     }
 
+    // Enable Write-Ahead Logging for much better concurrency and write speed
+    QSqlQuery q(db);
+    q.exec("PRAGMA journal_mode=WAL;");
+
     createTables();
     Logger::instance().info("SettingsService: Database initialized at " + databasePath());
     return true;
@@ -153,6 +157,10 @@ void SettingsService::saveSession(const QList<SessionTab> &tabs,
                                    const QByteArray &splitterState)
 {
     QSqlDatabase db = QSqlDatabase::database("nanomark_settings");
+    
+    // Wrap entire session save in a single transaction for massive speedup
+    db.transaction();
+    
     QSqlQuery q(db);
 
     // Clear old session
@@ -186,6 +194,8 @@ void SettingsService::saveSession(const QList<SessionTab> &tabs,
     saveBlob("window_geometry", windowGeometry);
     saveBlob("window_state", windowState);
     saveBlob("splitter_state", splitterState);
+
+    db.commit();
 
     Logger::instance().info("Session saved: " + QString::number(tabs.size()) + " tabs");
 }

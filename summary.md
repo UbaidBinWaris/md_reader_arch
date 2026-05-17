@@ -1,4 +1,4 @@
-# NanoMark — Technical Summary (Phase 3.1 Stabilization Updated)
+# NanoMark — Technical Summary (Phase 3.2 Optimization Updated)
 
 ## Overview
 NanoMark is a C++20/Qt6 desktop markdown editor and study workspace.
@@ -43,7 +43,7 @@ tests/         CMakeLists.txt, test_renderer.cpp
 - **Engine**: SQLite 3 (`nanomark.db`).
 - **Tables**: `settings`, `recent_files`, `session_tabs`, `session_state`.
 - **Key Methods**: `saveSession()`, `restoreSessionTabs()`, `addRecentFile()`.
-- **Phase 3 Updates**: Now fully restores exact tabs, scroll positions, cursor positions, and active workspace directory on launch.
+- **Phase 3.2 Optimizations**: Operates in **WAL mode** (`PRAGMA journal_mode=WAL;`) for non-blocking concurrent I/O. `saveSession()` leverages **Batch Transactions** (`QSqlDatabase::transaction()`), collapsing dozens of flushes into a single atomic write for lightning-fast application shutdowns.
 
 ### ServiceRegistry.h / .cpp
 - **Pattern**: Central Service Locator.
@@ -70,6 +70,12 @@ tests/         CMakeLists.txt, test_renderer.cpp
 - **Welcome Screen**: Beautiful welcome dashboard displayed when no files are open.
 - **Design**: Premium VS Code / ChatGPT aesthetic adhering strictly to a 4px spacing grid.
 - **Features**: Recent documents list, Quick Start actions, Pinned placeholders, and Tips/Shortcuts.
+
+### CommandPalette.h / .cpp (New in Phase 3.2)
+- **UI Architecture**: A custom, frameless overlay widget inspired by Raycast and VS Code.
+- **Quick Open (`Ctrl+P`)**: Fuzzy-search over recent files and workspace directories.
+- **Command Palette (`Ctrl+Shift+P`)**: Searchable index of core application actions (e.g., Export, Theme, Study Mode).
+- **Navigation**: Full keyboard focus handling (`Up`, `Down`, `Enter`, `Escape`).
 
 ### MainWindow.cpp (Upgraded)
 - Now acts as a coordinator between `TabManager`, `WorkspaceManager`, `PreviewPane`, and `Dashboard`.
@@ -100,7 +106,8 @@ tests/         CMakeLists.txt, test_renderer.cpp
 - **Accents**: OpenAI green (`#10a37f`) for links, code blocks, and blockquotes.
 - **Tables**: Smooth hover states and rounded corners.
 
-### Preview Performance (Phase 3 Optimization)
+### Preview Performance (Phase 3.2 Optimization)
+- **Deferred Initialization**: `PreviewPane` acts as a lightweight `QWidget` placeholder on cold boot. The heavy `QWebEngineView` (Chromium) is lazily instantiated *only* when the preview actually receives content, drastically cutting initial memory overhead and startup lag.
 - **Debounced Rendering**: Preview updates use a 250ms debounce timer to keep UI smooth during rapid typing.
 - **Lazy Rendering**: Updates are paused when the preview is hidden or when in Study Mode.
 
