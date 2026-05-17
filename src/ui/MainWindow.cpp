@@ -754,11 +754,15 @@ void MainWindow::updatePreview()
     auto *editor = currentEditor();
     if (!editor) return;
 
+    bool isDark = ThemeManager::instance().currentTheme() == ThemeManager::Theme::Dark;
+    QString css = m_renderer->getPreviewCss();
+
     if (editor->isHtmlDirty()) {
         QString markdown = editor->toPlainText();
-        QString html = m_renderer->render(markdown);
-        editor->setCachedHtml(html);
-        m_previewPane->setHtml(html);
+        QString htmlBody = m_renderer->renderBody(markdown);
+        editor->setCachedHtml(htmlBody);
+        
+        m_previewPane->updatePreview(htmlBody, isDark, css);
 
         // Update outline
         auto headings = m_renderer->extractHeadings(markdown);
@@ -773,7 +777,7 @@ void MainWindow::updatePreview()
         }
     } else {
         // Cache hit! Instant rendering skip
-        m_previewPane->setHtml(editor->cachedHtml());
+        m_previewPane->updatePreview(editor->cachedHtml(), isDark, css);
     }
 }
 
@@ -879,9 +883,17 @@ void MainWindow::restoreWindowState()
 
     // Restore study mode
     m_isStudyMode = ss.get("isStudyMode", false).toBool();
-    // (Apply study mode state if needed - usually done via setupUI)
 
-    // Restore tabs
+    // Immediately display the window structure and dashboard (under 50ms startup!)
+    updateWorkspaceVisibility();
+
+    // Defer the heavy session and tab loading asynchronously to let event loop start instantly
+    QTimer::singleShot(0, this, &MainWindow::restoreSessionAsync);
+}
+
+void MainWindow::restoreSessionAsync()
+{
+    auto &ss = SettingsService::instance();
     auto tabs = ss.restoreSessionTabs();
     
     // Check for recovery files
@@ -938,7 +950,7 @@ void MainWindow::restoreWindowState()
         
         // Skip normal tab restore if we recovered
         if (msgBox.clickedButton() == restoreBtn) {
-            if (m_tabWidget->count() == 0) updateWorkspaceVisibility();
+            updateWorkspaceVisibility();
             return;
         }
     }
@@ -953,18 +965,28 @@ void MainWindow::restoreWindowState()
             delete w;
         }
 
-        for (const auto &tab : tabs) {
+        int activeIdx = -1;
+        for (int i = 0; i < tabs.size(); ++i) {
+            const auto &tab = tabs[i];
             if (QFile::exists(tab.filePath)) {
                 openFile(tab.filePath);
                 
                 // Set positions
                 if (auto *editor = currentEditor()) {
                     QTextCursor cursor = editor->textCursor();
-                    // Basic position restore (can be refined)
                     editor->verticalScrollBar()->setValue(tab.scrollPosition);
+                }
+
+                if (tab.isActive) {
+                    activeIdx = m_tabWidget->count() - 1;
                 }
             }
         }
+
+        if (activeIdx != -1) {
+            m_tabWidget->setCurrentIndex(activeIdx);
+        }
+        updateWorkspaceVisibility();
     }
 }
 

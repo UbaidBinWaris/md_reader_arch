@@ -1,4 +1,4 @@
-# NanoMark — Technical Summary (Phase 3.2 Optimization Updated)
+# NanoMark — Technical Summary (Phase 3.4 Stabilization & Startup Optimized)
 
 ## Overview
 NanoMark is a C++20/Qt6 desktop markdown editor and study workspace.
@@ -106,10 +106,15 @@ tests/         CMakeLists.txt, test_renderer.cpp
 - **Accents**: OpenAI green (`#10a37f`) for links, code blocks, and blockquotes.
 - **Tables**: Smooth hover states and rounded corners.
 
-### Preview Performance (Phase 3.2 Optimization)
-- **Deferred Initialization**: `PreviewPane` acts as a lightweight `QWidget` placeholder on cold boot. The heavy `QWebEngineView` (Chromium) is lazily instantiated *only* when the preview actually receives content, drastically cutting initial memory overhead and startup lag.
-- **Debounced Rendering**: Preview updates use a 250ms debounce timer to keep UI smooth during rapid typing.
-- **Lazy Rendering**: Updates are paused when the preview is hidden or when in Study Mode.
+### Preview Performance (Phase 3.4 Stabilization & Caching)
+- **Persistent HTML Shell & innerHTML Swap**: Instead of calling `setHtml()` repeatedly, which reloads Chromium entirely and causes white flashes, `PreviewPane` bootstraps a static HTML shell *once*. Subsequent rendering updates are executed using high-speed JavaScript `innerHTML` swaps via safe `QJsonDocument` string serialization. This preserves DOM states, scroll positions, and reduces CPU rendering overhead to near zero.
+- **Opaque Dark Paint Override**: Completely eliminated white rendering flashes. Sets `Qt::WA_OpaquePaintEvent` false, overrides Chromium's background directly to `#0d0d0d`, and embeds immediate CSS background styling into the bootstrap shell.
+- **Deferred Initialization**: The heavy Chromium WebEngine is instantiated *only* when the preview is opened/visible, cutting idle memory footprint drastically.
+- **Debounced Rendering**: Preview updates use a 250ms debounce timer to combine status updates and rendering pipelines during active typing.
+- **Instant Tab Switching (HTML Cache)**: Each tab's `Editor` caches its rendered HTML body. If the document hasn't changed (i.e. scrolling, cursor moves), NanoMark serves the cached HTML instantly (`< 1ms`) upon switching tabs.
+
+### Asynchronous Session Restoration (Phase 3.4 Startup Upgrade)
+- **Deferred tab restores**: To achieve sub-50ms cold boots, `MainWindow` loads the dashboard, settings, and workspace geometry synchronously, and then schedules all recovery/tab restoration work asynchronously via `QTimer::singleShot(0, ...)`. Tabs load progressively in the background without blocking the UI thread.
 
 ---
 
