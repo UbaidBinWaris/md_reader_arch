@@ -26,6 +26,14 @@
 
 namespace NanoMark {
 
+static void installScrollFilterRecursive(QObject *obj, QObject *filter) {
+    if (!obj) return;
+    obj->installEventFilter(filter);
+    for (QObject *child : obj->children()) {
+        installScrollFilterRecursive(child, filter);
+    }
+}
+
 PreviewPane::PreviewPane(QWidget *parent)
     : QWidget(parent)
 {
@@ -361,14 +369,6 @@ void PreviewPane::exportToPDF(const QString &filePath, const QString &html)
         // Clean up after a delay
         QTimer::singleShot(5000, exportPage, &QObject::deleteLater);
     });
-}
-
-static void installScrollFilterRecursive(QObject *obj, QObject *filter) {
-    if (!obj) return;
-    obj->installEventFilter(filter);
-    for (QObject *child : obj->children()) {
-        installScrollFilterRecursive(child, filter);
-    }
 }
 
 bool PreviewPane::eventFilter(QObject *obj, QEvent *event)
