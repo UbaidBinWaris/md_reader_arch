@@ -38,6 +38,8 @@
 #include <QVBoxLayout>
 #include <QStandardItemModel>
 #include <QHeaderView>
+#include <QLineEdit>
+#include <QSortFilterProxyModel>
 #include <QTextBlock>
 #include <QApplication>
 #include <QStyle>
@@ -404,11 +406,48 @@ void MainWindow::setupSidebar()
     m_outlineDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
     m_outlineDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
 
-    m_outlineView = new QTreeView(m_outlineDock);
+    QWidget *outlineContainer = new QWidget(m_outlineDock);
+    QVBoxLayout *outlineLayout = new QVBoxLayout(outlineContainer);
+    outlineLayout->setContentsMargins(4, 4, 4, 4);
+    outlineLayout->setSpacing(4);
+
+    m_outlineSearchEdit = new QLineEdit(outlineContainer);
+    m_outlineSearchEdit->setPlaceholderText(tr("Filter headings..."));
+    m_outlineSearchEdit->setStyleSheet(
+        "QLineEdit {"
+        "  background: #161616;"
+        "  color: #f8f9fa;"
+        "  border: 1px solid #2a2a2a;"
+        "  border-radius: 4px;"
+        "  padding: 4px 8px;"
+        "  font-size: 13px;"
+        "}"
+        "QLineEdit:focus {"
+        "  border-color: #007acc;"
+        "}"
+    );
+    outlineLayout->addWidget(m_outlineSearchEdit);
+
+    m_outlineView = new QTreeView(outlineContainer);
     m_outlineView->setHeaderHidden(true);
-    m_outlineView->setModel(new QStandardItemModel(this));
-    m_outlineDock->setWidget(m_outlineView);
+    m_outlineView->setFrameShape(QFrame::NoFrame);
+
+    m_outlineModel = new QStandardItemModel(this);
+    m_outlineFilterProxyModel = new QSortFilterProxyModel(this);
+    m_outlineFilterProxyModel->setSourceModel(m_outlineModel);
+    m_outlineFilterProxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+    m_outlineFilterProxyModel->setFilterKeyColumn(0);
+
+    m_outlineView->setModel(m_outlineFilterProxyModel);
+    outlineLayout->addWidget(m_outlineView);
+
+    m_outlineDock->setWidget(outlineContainer);
     connect(m_outlineView, &QTreeView::clicked, this, &MainWindow::onOutlineHeadingClicked);
+
+    connect(m_outlineSearchEdit, &QLineEdit::textChanged, this, [this](const QString &text) {
+        m_outlineFilterProxyModel->setFilterFixedString(text);
+    });
+
     addDockWidget(Qt::LeftDockWidgetArea, m_outlineDock);
 
     // Tab the two docks together
@@ -453,14 +492,19 @@ void MainWindow::createNewTab(const QString &title, const QString &content)
             this, &MainWindow::onEditorTextChanged);
     connect(editor, &QPlainTextEdit::cursorPositionChanged,
             this, &MainWindow::schedulePreviewUpdate);
+    connect(editor, &QPlainTextEdit::cursorPositionChanged,
+            this, &MainWindow::syncOutlineHighlight);
     connect(editor->verticalScrollBar(), &QScrollBar::valueChanged, this, [this, editor]() {
-        if (editor == currentEditor() && m_previewPane->isVisible()) {
-            QScrollBar *vBar = editor->verticalScrollBar();
-            double percent = 0.0;
-            if (vBar->maximum() > 0) {
-                percent = static_cast<double>(vBar->value()) / vBar->maximum();
+        if (editor == currentEditor()) {
+            if (m_previewPane->isVisible()) {
+                QScrollBar *vBar = editor->verticalScrollBar();
+                double percent = 0.0;
+                if (vBar->maximum() > 0) {
+                    percent = static_cast<double>(vBar->value()) / vBar->maximum();
+                }
+                m_previewPane->scrollToPercentage(percent);
             }
-            m_previewPane->scrollToPercentage(percent);
+            syncOutlineHighlight(); // Track active heading position dynamically
         }
     });
 
@@ -754,7 +798,8 @@ void MainWindow::onSidebarFileClicked(const QModelIndex &index)
 
 void MainWindow::onOutlineHeadingClicked(const QModelIndex &index)
 {
-    QVariant data = index.data(Qt::UserRole);
+    QModelIndex sourceIndex = m_outlineFilterProxyModel->mapToSource(index);
+    QVariant data = sourceIndex.data(Qt::UserRole);
     if (!data.isValid()) return;
 
     int lineNum = data.toInt();
@@ -769,8 +814,10 @@ void MainWindow::onOutlineHeadingClicked(const QModelIndex &index)
         QTextCursor cursor(block);
         editor->setTextCursor(cursor);
         
-        // Scroll the block perfectly to the top of the viewport
-        editor->verticalScrollBar()->setValue(block.blockNumber());
+        // Scroll the viewport to the bottom first so that the target block is guaranteed to be above the viewport.
+        editor->verticalScrollBar()->setValue(editor->verticalScrollBar()->maximum());
+        // Force Qt to scroll up to make the cursor visible, which aligns it perfectly at the top of the viewport!
+        editor->ensureCursorVisible();
         
         // Ensure the clicked outline tree item itself is perfectly scrolled and centered in view
         m_outlineView->scrollTo(index);
@@ -803,7 +850,7 @@ void MainWindow::updatePreview()
 
     // Always update outline (on keystrokes, loads, and tab switches) regardless of preview pane visibility!
     auto headings = m_renderer->extractHeadings(markdown);
-    auto *model = qobject_cast<QStandardItemModel*>(m_outlineView->model());
+    auto *model = m_outlineModel;
     if (model) {
         model->clear();
         if (headings.isEmpty()) {
@@ -823,6 +870,8 @@ void MainWindow::updatePreview()
             }
         }
     }
+
+    syncOutlineHighlight(); // Update the highlight on the freshly populated outline model
 
     // Return early for WebEngine updates if preview pane is hidden
     if (!m_previewPane->isVisible()) return;
@@ -880,6 +929,40 @@ void MainWindow::updateStatusBar()
     }
 
     m_modeLabel->setText(m_isStudyMode ? "Study Mode" : "Edit Mode");
+}
+
+void MainWindow::syncOutlineHighlight()
+{
+    auto *editor = currentEditor();
+    if (!editor || !m_outlineModel || !m_outlineFilterProxyModel) return;
+
+    // Use first visible block line number for natural reading position tracking
+    int currentLine = editor->firstVisibleBlock().blockNumber() + 1;
+    
+    // Retrieve extracted headings from the renderer directly
+    QString markdown = editor->toPlainText();
+    auto headings = m_renderer->extractHeadings(markdown);
+    if (headings.isEmpty()) return;
+
+    int activeIndex = -1;
+    for (int i = 0; i < headings.size(); ++i) {
+        if (headings[i].lineNumber <= currentLine) {
+            activeIndex = i;
+        } else {
+            break;
+        }
+    }
+
+    if (activeIndex != -1) {
+        QModelIndex srcIndex = m_outlineModel->index(activeIndex, 0);
+        QModelIndex proxyIndex = m_outlineFilterProxyModel->mapFromSource(srcIndex);
+        if (proxyIndex.isValid()) {
+            m_outlineView->blockSignals(true);
+            m_outlineView->setCurrentIndex(proxyIndex);
+            m_outlineView->scrollTo(proxyIndex, QAbstractItemView::EnsureVisible);
+            m_outlineView->blockSignals(false);
+        }
+    }
 }
 
 void MainWindow::updateWindowTitle()

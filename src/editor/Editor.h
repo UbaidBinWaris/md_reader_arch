@@ -40,6 +40,7 @@ public:
     QString cachedHtml() const;
     bool isHtmlDirty() const;
     void markHtmlClean();
+    QTextBlock firstVisibleBlock() const;
 
 protected:
     void resizeEvent(QResizeEvent *event) override;

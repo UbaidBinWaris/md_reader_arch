@@ -96,6 +96,11 @@ void Editor::markHtmlClean()
     m_htmlDirty = false;
 }
 
+QTextBlock Editor::firstVisibleBlock() const
+{
+    return QPlainTextEdit::firstVisibleBlock();
+}
+
 // ─── Formatting Helpers ────────────────────────────────────────────────────────
 
 void Editor::insertFormatting(const QString &prefix, const QString &suffix)

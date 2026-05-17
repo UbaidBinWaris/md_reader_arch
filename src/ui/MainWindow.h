@@ -15,6 +15,10 @@
 #include <QStackedWidget>
 #include <memory>
 
+class QLineEdit;
+class QStandardItemModel;
+class QSortFilterProxyModel;
+
 namespace NanoMark {
 
 class Editor;
@@ -82,6 +86,7 @@ private:
     void schedulePreviewUpdate();
     void updatePreview();
     void updateStatusBar();
+    void syncOutlineHighlight();
     void updateWindowTitle();
     void saveWindowState();
     void restoreWindowState();
@@ -98,6 +103,9 @@ private:
     QTreeView *m_fileTreeView = nullptr;
     QDockWidget *m_outlineDock = nullptr;
     QTreeView *m_outlineView = nullptr;
+    QLineEdit *m_outlineSearchEdit = nullptr;
+    QStandardItemModel *m_outlineModel = nullptr;
+    QSortFilterProxyModel *m_outlineFilterProxyModel = nullptr;
 
     // Status bar labels
     QLabel *m_lineColLabel = nullptr;
