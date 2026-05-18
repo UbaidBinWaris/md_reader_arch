@@ -93,6 +93,7 @@ private:
     void updateStatusBar();
     void syncOutlineHighlight();
     void highlightOutlineHeadingAtLine(int lineNumber);
+    void toggleSidebar();
     void updateWindowTitle();
     void saveWindowState();
     void updateStudyTabBar();

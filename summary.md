@@ -1,198 +1,167 @@
-# NanoMark — Technical Summary (Phase 3.4 Stabilization & Startup Optimized)
+# NanoMark — Technical Architecture & Stabilization Summary
 
-## Overview
-NanoMark is a C++20/Qt6 desktop markdown editor and study workspace.
-Binary: build/NanoMark (11 MB) | Build: cmake + make | Status: COMPILES & RUNS
+## 1. Overview & Core Mission
+NanoMark is a premium, high-performance, dark-themed Markdown desktop editor and interactive study workspace built on **C++20** and **Qt 6.11**. It is engineered to bridge the gap between structured document layout, real-time interactive previews, study annotations, and publication-quality vector exports.
 
-## Tech Stack
-- **Language**: C++20
-- **Framework**: Qt 6.11 (Widgets, WebEngine, PrintSupport, Sql, Test)
-- **Persistence**: **SQLite 3**
-- **UI**: Premium OpenAI/ChatGPT-inspired Dark/Light Modern
-- **Preview**: Chromium-based WebEngine + Inter Font
+* **Binary**: `build/NanoMark` (~11 MB in Release mode)
+* **Build System**: CMake + Make
+* **Target Audience**: Researchers, students, and writers who require side-by-side editing, distraction-free reading, interactive outline tracking, and perfect print media compilation.
 
-## Project Structure
+---
+
+## 2. Technology Stack & Key Dependencies
+* **Core Language**: C++20 (utilizing modern abstractions, structured bindings, and lambda slot captures)
+* **Application Framework**: Qt 6.11 (Widgets, WebEngineWidgets, PrintSupport, Sql, Test)
+* **Storage Engine**: SQLite 3 (operating in highly concurrent **Write-Ahead Logging (WAL)** mode for persistent session tracking, preferences, and workspace histories)
+* **Markdown Rendering (UI)**: Custom Qt-based fast parser + QWebEngineView (Chromium-based backend)
+* **PDF Compile Pipeline (Vector)**: Python 3 + WeasyPrint Layout Engine (microservice architecture for true typesetting and vector PDF rendering)
+* **Design Language**: Harmonized Dark/Light OpenAI-inspired design system with thin, dynamic scrollbars and high-contrast typography
+
+---
+
+## 3. Directory & Module Structure
+
 ```text
 src/
-  core/        main.cpp, Application.h/.cpp, SettingsService.h/.cpp, ServiceRegistry.h/.cpp, PluginInterface.h
-  ui/          MainWindow.h/.cpp, TabManager.h/.cpp, WindowManager.h/.cpp, Dashboard.h/.cpp
-  editor/      Editor.h/.cpp, MarkdownHighlighter.h/.cpp
-  markdown/    MarkdownRenderer.h/.cpp
-  preview/     PreviewPane.h/.cpp
-  filemanager/ FileManager.h/.cpp, WorkspaceManager.h/.cpp, AutosaveManager.h/.cpp
-  study/       StudyMode.h/.cpp, StickyNotes.h/.cpp, Annotations.h/.cpp, NanomarkFile.h/.cpp
-  themes/      ThemeManager.h/.cpp
-  export/      ExportManager.h/.cpp, PDFExporter.h/.cpp, HTMLExporter.h/.cpp
-  utils/       Logger.h/.cpp, ErrorHandler.h/.cpp
-resources/
-  themes/      dark.qss, light.qss (Premium OpenAI Themes)
-  resources.qrc
-tests/         CMakeLists.txt, test_renderer.cpp
+  core/           # Main entry point, Application initialization, WAL-optimized Settings Database
+  ui/             # MainWindow layout coordination, TabManager, Dashboard welcome panel
+  editor/         # One Dark styled QPlainTextEdit, live Markdown Highlighter, dynamic line offsets
+  markdown/       # Markdown-to-HTML parser (incorporating GFM tables, codes blocks, and data-line tracking)
+  preview/        # Persistent Chromium-based QWebEngineView, event filters, DOM update swaps
+  filemanager/    # Highly responsive 200ms keystroke-debounced Autosave & Workspace restoration
+  study/          # Portable .nanomark sidecar annotation model, read-only mode toggle
+  themes/         # Centralized ThemeManager coordinating custom dark.qss and light.qss
+  export/         # PDF & HTML ExportManager interfacing with the external Python microservice
+  utils/          # High-performance Logger and runtime global Exception/Crash Handlers
+microservices/
+  pdf_service/    # WeasyPrint layout engine service with print-perfect publication stylesheets
+resources/        # Embedded resource system containing SVG icons and QSS stylesheets
+tests/            # QtTest suite validating parsing pipelines, GFM tables, and rendering tags
 ```
 
 ---
 
-## Module 1: core — Application & Infrastructure
+## 4. Upgraded Technical Architecture & Key Systems
 
-### Application.cpp & main.cpp
-- Initializes **ErrorHandler**, **SettingsService**, and **ThemeManager**.
-- Creates the primary **MainWindow** via **WindowManager**.
-- **Phase 3.1**: Sets global window icon (`logo.svg`) and silences Linux Chromium Vulkan/GPU warnings via `qputenv`.
+### A. Pure Vector-Perfect PDF Exporter Pipeline
+* **The Problem**: Pre-stabilization PDF exports captured rasterized, pixelated snapshots of the active QWebEngineView viewport. This caused bloated file sizes, blurry text on zoom, unselectable/unsearchable text, black margins, and poor printing quality.
+* **The Architecture**:
+  ```text
+  Markdown Document (Raw Source)
+        ↓
+  Python Microservice CLI / HTTP API
+        ↓
+  WeasyPrint Render Engine (Typesetting & Layout)
+        ↓
+  Vector PDF (Selectable, Searchable, High-Resolution)
+  ```
+* **Implementation Details**:
+  * Offloaded the PDF compile pipeline directly to Python's **WeasyPrint** layout engine, completely bypassing viewport screenshots.
+  * Overhauled the print stylesheet (`PRINT_CSS` inside `microservices/pdf_service/service.py`) to enforce strict **A4 dimensions**, clean **20mm paper margins**, and custom Pygments light-background code highlighting.
+  * Enforced crisp gridlines (`#b0b0b0`) for GFM tables and clearly defined borders for codeblocks to ensure excellent contrast on printed paper.
 
-### SettingsService.h / .cpp
-- **Engine**: SQLite 3 (`nanomark.db`).
-- **Tables**: `settings`, `recent_files`, `session_tabs`, `session_state`.
-- **Key Methods**: `saveSession()`, `restoreSessionTabs()`, `addRecentFile()`.
-- **Phase 3.2 Optimizations**: Operates in **WAL mode** (`PRAGMA journal_mode=WAL;`) for non-blocking concurrent I/O. `saveSession()` leverages **Batch Transactions** (`QSqlDatabase::transaction()`), collapsing dozens of flushes into a single atomic write for lightning-fast application shutdowns.
+### B. Real-Time Viewport Scroll Tracking & Outline Sync (Study Mode)
+* **The Problem**: In Edit Mode, the active text editor's scrollbar triggers outline highlights. However, in **Study Mode**, the text editor is hidden (`m_tabWidget->hide()`). Under Qt, hidden widgets have their rendering cycles frozen, and their scrollbar `firstVisibleBlock()` values remain static, freezing the outline selection.
+* **The Architecture**:
+  * **Line Attribute Compilation**: The Markdown-to-HTML parser (`src/markdown/MarkdownRenderer.cpp`) now injects a custom `data-line` attribute into every heading tag representing its exact Markdown source line number:
+    `html += QString("<h%1 id='%2' data-line='%3'>%4</h%1>\n").arg(level).arg(id).arg(i + 1).arg(text);`
+  * **JS Viewport Scanner**: Embedded a high-performance JavaScript viewport analyzer inside the HTML shell of the preview pane:
+    ```javascript
+    window.getActiveHeadingLineNumber = function() {
+        var headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
+        var activeLine = -1;
+        for (var i = 0; i < headings.length; i++) {
+            var h = headings[i];
+            var rect = h.getBoundingClientRect();
+            if (rect.top <= 120) { // Scrolled past or near top of viewport
+                var line = parseInt(h.getAttribute('data-line'));
+                if (!isNaN(line)) activeLine = line;
+            }
+        }
+        return activeLine;
+    };
+    ```
+  * **Bridge Signal**: Connected `QWebEnginePage::scrollPositionChanged` in `PreviewPane.cpp` to execute the JavaScript scanner asynchronously. The returned line number is emitted via the C++ signal `headingVisibleAtTopChanged(int lineNumber)`.
+  * **Highlights**: Connected this signal in `MainWindow.cpp` to selectively invoke `highlightOutlineHeadingAtLine(lineNumber)` which highlights the corresponding heading node in the tree outline panel in real-time as the user scrolls.
 
-### ServiceRegistry.h / .cpp
-- **Pattern**: Central Service Locator.
-- **Purpose**: Decouples modules; provides typed access to services (Editor, Preview, etc.).
+### C. Smooth Heading Scroll & Premium Spacing Layout
+* **The Problem**: Clicking an outline item used to scroll the preview pane to an arbitrary scroll *percentage* mapped from the editor. Due to structural styling mismatches (different margins, word wrapping, and font sizes), this resulted in headings being pushed off-screen or cut off at the top.
+* **The Architecture**:
+  * **Modern CSS Scroll Margin**: Embedded `scroll-margin-top: 60px;` natively into the live preview CSS stylesheet for headings `h1` through `h6`.
+  * **Element-Level Scroll**: Added `scrollToHeadingLine(int line)` in `PreviewPane`, which invokes the native browser scroll API on the exact heading DOM node matching the line number:
+    `document.querySelector('[data-line="' + line + '"]').scrollIntoView({ behavior: 'smooth', block: 'start' });`
+  * This causes the browser to smoothly glide the heading into focus, naturally reserving a gorgeous 60px margin at the top of the viewport.
+  * **Editor Offset**: Adjusted the text editor's outline navigation to scroll slightly up by two lines (`qMax(0, scrollVal - step * 2)`) after executing `ensureCursorVisible()`, creating a symmetrical, clean margin in Editor Mode.
 
-### PluginInterface.h
-- **IID**: `com.nanomark.PluginInterface/1.0`.
-- Defines lifecycle: `initialize(ServiceRegistry*)` and `shutdown()`.
+### D. Event Filter Scroll Lock/Feedback Resolution
+* **The Problem**: When the user scrolled the preview pane, the `PreviewPane::eventFilter` intercepted the wheel events and delegated them to the text editor to enable synchronous scrolling. However, in Study Mode (where the editor is hidden), the editor's scrollbar has no valid layout and its scroll maximum drops to `0`. This resulted in the event filter calculating an invalid percentage and forcefully scrolling the preview pane back to the top of the page, causing jumpy, broken scroll behavior.
+* **The Architecture**:
+  * Updated `PreviewPane::eventFilter` to **only intercept and delegate wheel events if the editor is visible**:
+    `if (editor->isVisible()) { ... delegate scroll ... }`
+  * If the editor is hidden (e.g. in Study Mode), the event filter returns `false` immediately, letting the WebEngineView scroll 100% naturally using Chromium's native engine without feedback loops.
 
----
-
-## Module 2: ui — Window, Tab & Dashboard Management
-
-### WindowManager.h / .cpp
-- **Singleton**: Manages multiple `MainWindow` instances.
-- **Multi-Window**: Supports "Open in New Window" for independent workspace contexts.
-
-### TabManager.h / .cpp
-- **Logic Extraction**: Handles tab creation, closing, and reordering.
-- **Context Menu**: "Close", "Close Others", "Close All".
-- **State**: Tracks modified status with "•" indicators.
-
-### Dashboard.h / .cpp (Redesigned in Phase 3.1)
-- **Welcome Screen**: Beautiful welcome dashboard displayed when no files are open.
-- **Design**: Premium VS Code / ChatGPT aesthetic adhering strictly to a 4px spacing grid.
-- **Features**: Recent documents list, Quick Start actions, Pinned placeholders, and Tips/Shortcuts.
-
-### CommandPalette.h / .cpp (New in Phase 3.2)
-- **UI Architecture**: A custom, frameless overlay widget inspired by Raycast and VS Code.
-- **Quick Open (`Ctrl+P`)**: Fuzzy-search over recent files and workspace directories.
-- **Command Palette (`Ctrl+Shift+P`)**: Searchable index of core application actions (e.g., Export, Theme, Study Mode).
-- **Navigation**: Full keyboard focus handling (`Up`, `Down`, `Enter`, `Escape`).
-
-### MainWindow.cpp (Upgraded)
-- Now acts as a coordinator between `TabManager`, `WorkspaceManager`, `PreviewPane`, and `Dashboard`.
-- **Status Bar Upgrades**: Dynamic "Read Time" (200 wpm calculation) and "File Size" formatting (KB/MB) running in real-time.
-- Contextually hides Line/Col information in Study Mode.
-- **Startup Recovery**: Bypasses dialog prompts to **always restore recovery sessions automatically** on startup, backed by try-catch fallback structures to open a clean workspace on database/file read failures.
-- **Interactive Outline & Scroll Sync**: Coordinates two-way scroll synchronization, promptless startup recoveries, and active reading section tracking. Exposes the viewport-top scroll alignment logic (`setValue(maximum())` followed by `ensureCursorVisible()`) to scroll editor text perfectly to the top edge on heading double-clicks.
-- **View Layout State Persistence**: Saves the exact visibility state of the preview pane (`isPreviewVisible`) in SQLite and restores it on startup, resolving startup layout glitches.
-- **Lockstep Toggle Synchronizations**: Exposes checkable menu actions (`m_toggleStudyAction`, `m_togglePreviewAction`) and binds their check states in absolute phase-lockstep with backend variables, enabling `Ctrl + E` to toggle Study Mode instantly on the very first keystroke after starting in editor-only mode.
-- **Authoritative Window Close Lifecycle**: Cleaned up startup race conditions by removing `saveWindowState` from `~MainWindow()`, letting a single, clean `closeEvent()` authoritative flow save tab sessions perfectly without teardown resets (resolving the "0 tabs saved" database bug).
-- **Strict Restoration Order Pipeline**: Executes a strictly ordered, event-locked asynchronous session restoration pipeline (`layout ➔ tabs & editors ➔ text cursors ➔ scrollbars ➔ outline ➔ preview`). Debounces and paint triggers are disabled using `m_isRestoringSession` locks, and vertical scrollbar application is deferred by 50ms to ensure editor document layouts have finished computing.
-- **View-Only Study Mode & Mode-Switch Autosaving**: Locks all editors to read-only (`setReadOnly(true)`) while Study Mode is active. Before swapping layouts inside `onToggleStudyMode()`, the active editor's file is cleanly saved to disk (using `onSaveFile()` if it has a file path, or `forceAutosave()` if Untitled), completely avoiding data loss.
-
----
-
-## Module 3: editor — Premium Text Editing
-
-### Editor.cpp
-- **Theme**: Harmonized with deep black `#0d0d0d` background.
-- **Line Numbers**: Dynamic coloring (highlighted current line).
-- **Behavior**: Auto-indentation, list continuation, 4-space tabs.
-- **Public API**: Exposes `firstVisibleBlock()` publicly to support active outline section reading tracking.
-
-### MarkdownHighlighter.cpp
-- **Visuals**: One Dark Modern regex rules.
-- **States**: Fenced code blocks detection for background shading.
+### E. Unified Sidebar Toggle & Shortcut Conflict Resolution
+* **The Problem**: Having multiple QAction objects mapped to the same shortcut (e.g., `Ctrl+B`) caused Qt to throw `"Ambiguous shortcut overload: Ctrl+B"` warnings, rendering keyboard toggling non-functional.
+* **The Architecture**:
+  * **Centralized Method**: Created a single main window toggle handler `MainWindow::toggleSidebar()`. If either sidebar dock is visible, it hides both; if both are hidden, it restores both and raises the primary File Explorer dock.
+  * **View Menu Action**: Assigned **`Ctrl+Shift+B`** globally to the View Menu's "Toggle Sidebar" action and connected it directly to `toggleSidebar()`.
+  * **Toolbar Button**: Added a dedicated `📂 Sidebar` button to the main toolbar. It is connected to the same `toggleSidebar()` slot but holds **no keyboard shortcut assignment**, completely resolving duplicate ambiguous shortcut overloads in Qt.
 
 ---
 
-## Module 4: markdown — Rendering Engine & Preview
+## 5. Architectural Flaws, Edge Cases & Mitigations
 
-### MarkdownRenderer.cpp (Upgraded)
-- **CSS Engine**: Premium styling inspired by ChatGPT.
-- **Typography**: Inter font stack, optimized line heights (1.75).
-- **Accents**: OpenAI green (`#10a37f`) for links, code blocks, and blockquotes.
-- **Tables**: Smooth hover states and rounded corners.
+### 1. WebEngine Initialization White Flashes & Wayland Transparencies
+* **Flaw**: Under Linux Wayland compositors, initializing or displaying the `QWebEngineView` can lead to brief, blinding white flashes or layout compositor crashes due to GPU pipeline delays.
+* **Mitigation**:
+  * Enforced opaque painting via `m_webView->setAttribute(Qt::WA_OpaquePaintEvent, true)`.
+  * Explicitly set the background color of `QWebEnginePage` to `#0d0d0d` before rendering.
+  * Configured `--disable-gpu-compositing` on `QTWEBENGINE_CHROMIUM_FLAGS` in `main.cpp` to force a stable software rendering pathway on Linux environments.
+  * Deferred instantiation of the WebEngineView entirely until it is first requested to save startup memory.
 
-### Preview Performance (Phase 3.4 Stabilization & Caching)
-- **Persistent HTML Shell & innerHTML Swap**: Instead of calling `setHtml()` repeatedly, which reloads Chromium entirely and causes white flashes, `PreviewPane` bootstraps a static HTML shell *once*. Subsequent rendering updates are executed using high-speed JavaScript `innerHTML` swaps via safe `QJsonDocument` string serialization. This preserves DOM states, scroll positions, and reduces CPU rendering overhead to near zero.
-- **Timing-Safe JavaScript Handshake**: Handled race conditions by checking `window.nanoMarkReady === true` via a C++ deferred polling handshake loop inside `onLoadFinished()`. Guarantees JS functions are fully parsed and live before content injection starts.
-- **Global JS Scope Fix**: Exposed the swap functions directly on the `window.updateContent` namespace, completely resolving WebEngine scope isolation issues.
-- **QTextBrowser Fallback Engine**: If Chromium fails, crashes, or is unavailable in the host sandbox environment, rendering automatically hot-swaps to a native, theme-harmonized `QTextBrowser` widget, preventing blank preview states.
-- **Robust Exception Logging**: Connected a global `window.onerror` catch block in the JS shell to route runtime scripting errors directly to developer logs via a `runJavaScript` logging callback.
-- **Opaque Dark Paint Override**: Completely eliminated white rendering flashes. Sets `Qt::WA_OpaquePaintEvent` false, overrides Chromium's background directly to `#0d0d0d`, and embeds immediate CSS background styling into the bootstrap shell.
-- **Wayland Software Renderer Fallback**: Configured `--disable-gpu-compositing` on `QTWEBENGINE_CHROMIUM_FLAGS` in `main.cpp` to prevent transparent compositor bleed-through crashes on Linux Wayland.
-- **Deferred Initialization**: The heavy Chromium WebEngine is instantiated *only* when the preview is opened/visible, cutting idle memory footprint drastically.
-- **Blazing-Fast Debounced Rendering**: Debounce interval is configured to **`20ms`** (equaling 50 FPS!), which delivers incredibly fluid, instant, and lag-free real-time typing preview updates without any visual delay.
-- **Study Mode Full-Width Rendering**: Completely decoupled rendering loops from `m_isStudyMode` checks, allowing users to read their compiled documents in elegant distraction-free full-width Study views.
-- **Instant Tab Switching (HTML Cache)**: Each tab's `Editor` caches its rendered HTML body. If the document hasn't changed (i.e. scrolling, cursor moves), NanoMark serves the cached HTML instantly (`< 1ms`) upon switching tabs.
-- **Ready-Gated Cache Verification & Handshake Clear**: Solved initialization caching bugs by gating HTML comparison checks on `m_state == PreviewState::Ready`, and proactively clearing `m_lastHtmlBody` right before executing handshake pending updates, ensuring document-load injections always run flawlessly.
-- **Offline Highlight Safety**: Added checks to prevent JS failures if highlight.js CDN stylesheets are offline.
+### 2. High-Speed Typing Thread Choking
+* **Flaw**: Attempting to rebuild and compile the HTML structure on every keyboard keystroke results in main-thread UI lagging.
+* **Mitigation**:
+  * Embedded a highly optimized **20ms debounce single-shot timer** (`m_renderTimer`) which chokes excessive render requests.
+  * Utilized high-speed Javascript DOM `innerHTML` swapping via safe JSON-escaped strings rather than re-triggering slow Chromium page reloads.
 
-- **Asynchronous Session Restoration & Autorestore**: Bypassed dialog prompts to **always restore** recovery documents automatically on startup. Protected by try-catch blocks to safely open a clean workspace on read failures.
-- **Continuous Document Outline**: Pulled heading generation outside of cache dirty checks so outlines rebuild instantly on tab swap and cold boot. Shows a dim/italic `"No headings found"` placeholder row when headers are empty.
-- **Interactive Outline Navigation**: Connected the `QTreeView` outline items to scroll the editor by block-by-line using stored `lineNumber` and native `QTextBlock` APIs. Clicking a heading now scrolls it perfectly to the very top edge of the editor viewport via a robust `setValue(maximum())` followed by `ensureCursorVisible()` scroll-up alignment strategy (bypassing word-wrapped scrollbar unit offsets), while automatically ensuring that the clicked outline tree item itself is highlighted and scrolled to in the left sidebar tree view.
-- **Active Section Reading Tracking**: Dynamically tracks the visible section at the very top of the editor viewport (`firstVisibleBlock()`) and automatically highlights/scrolls to that heading in the left Outline sidebar in real-time as the user types or scrolls through their document.
-- **Real-Time Outline Search Filter**: Integrated a premium, dark-themed `QLineEdit` search bar at the top of the Outline sidebar widget, using a high-performance `QSortFilterProxyModel` to filter outline headings instantaneously as the user types.
-- **Symmetric Two-Way Scroll Sync**: Synchronizes the vertical scroll position of both the Editor and HTML Preview panel bidirectionally. Scrolling on either pane will scroll the other in perfect real-time unison.
-- **Single-Scrollbar Cleanliness**: Hid the redundant second scrollbar on the preview pane (`::-webkit-scrollbar { display: none; }` and `setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff)`) to present a single, sleek, unified scroll layout.
-- **Premium Stylings**: Integrated opaque editor composition overlays, raised text contrast to `#f8f9fa` for superb readability, added dark-contrasted selected tab active states, and enforced solid `#2a2a2a` borders throughout the global `dark.qss` layout.
+### 3. SQLite Database Write Bottlenecks on Shutdown
+* **Flaw**: Restoring or saving session state variables (dozens of tabs, scroll positions, files) on close can cause heavy disk flushing, slowing down application teardown.
+* **Mitigation**:
+  * Configured SQLite to run in **Write-Ahead Logging (WAL)** mode.
+  * Consolidated session updates into a single atomic transactional block:
+    ```cpp
+    QSqlDatabase::database().transaction();
+    // ... write session tables ...
+    QSqlDatabase::database().commit();
+    ```
 
----
-
-## Module 5: filemanager — Autosave & File I/O
-
-### AutosaveManager.h / .cpp (Overhauled in Phase 3.4)
-- **Keystroke-Debounced Instant Autosave**: Replaced 15-second background timers with a highly responsive `200ms` single-shot debounce timer. The editor now automatically saves your modifications to the `.autosave` recovery file immediately as you type (triggered instantly 200ms after you pause).
-- **Tracking**: Correctly tracks and saves unsaved "Untitled" documents. Connects to `QPlainTextEdit::textChanged`.
-- **Metadata**: Embeds original file paths directly inside the backup file for seamless restoration.
-- **Cleanup**: Removes backup files upon successful manual save or clean close.
-- **Autosave-Disabled Study Mode**: Skips markDirty and processAutosaves processing entirely for any read-only editor, ensuring zero background disk I/O occurs when users are strictly reading in Study Mode.
+### 4. Headless Sandbox Environments
+* **Flaw**: In specialized host sandboxes (e.g. flatpak or docker), Chromium GPU components can crash upon starting.
+* **Mitigation**:
+  * If Chromium initialization fails, NanoMark automatically hot-swaps to a native `QTextBrowser` widget, rendering a styled HTML document fallback cleanly without UI blackouts.
 
 ---
 
-## Module 6: study — Portable Annotations
+## 6. Build, Test & Run Pipelines
 
-### NanomarkFile.h / .cpp
-- **Format**: `.nanomark` sidecar file (JSON).
-- **Content**: Sticky notes, Annotations, Bookmarks, and Reading Progress.
-- **Workflow**: Portable metadata stays next to `.md` without polluting original source.
-
-### StudyMode.cpp
-- **Mode**: Read-only focus mode.
-- **View**: Continuous smooth HTML rendering.
-
----
-
-## Module 7: themes — Premium Design System
-
-### dark.qss / light.qss (Upgraded)
-- **Design System**: 4px spacing grid.
-- **Palette**: Deep blacks (`#0d0d0d`), subtle borders (`#2e2e2e`), and green accents.
-- **Focus Rings**: Removed default Qt focus outlines (`*:focus { outline: none; }`).
-- **Scrollbars**: Modern, thin semi-transparent scrollbars (6px) that smoothly expand on hover (10px).
-
----
-
-## Module 8: tests — Quality Assurance (New in Phase 3)
-
-### QtTest Integration
-- Setup unit testing infrastructure using `Qt6::Test`.
-- `test_renderer.cpp`: Verifies Markdown parsing and HTML output (headings, bold, tables).
-
----
-
-## Build Instructions
+### Build Instructions
 ```bash
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Debug
-make -j$(nproc)
-./NanoMark
+# 1. Clean and configure the build directory
+mkdir -p build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
 
-# Run Tests
-ctest --output-on-failure
+# 2. Compile sources utilizing all CPU threads
+make -j$(nproc)
+
+# 3. Launch NanoMark
+./NanoMark
 ```
 
-## Binary Info
-- **Size**: ~11 MB (Phase 3 Debug)
-- **Dependencies**: Qt6 (Core, Gui, Widgets, WebEngineWidgets, PrintSupport, Sql, Test)
-- **Persistence**: SQLite 3
+### Test Suite Execution
+NanoMark includes a unified QtTest unit-testing suite and Python microservice integration validation:
+```bash
+./test
+```
+* **C++ Tests**: Verifies markdown parsing, inline formatting, table generation, and data-line attribute rendering.
+* **Python Tests**: Validates Pygments syntax rendering, HTML WeasyPrint generation, CLI export tools, and active microservice HTTP endpoint responses.

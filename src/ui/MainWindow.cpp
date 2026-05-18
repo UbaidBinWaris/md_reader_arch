@@ -342,10 +342,8 @@ void MainWindow::setupMenuBar()
     viewMenu->addSeparator();
 
     QAction *toggleSidebarAction = viewMenu->addAction(tr("Toggle Si&debar"));
-    toggleSidebarAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_B));
-    connect(toggleSidebarAction, &QAction::triggered, this, [this]() {
-        if (m_sidebarDock) m_sidebarDock->setVisible(!m_sidebarDock->isVisible());
-    });
+    toggleSidebarAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_B));
+    connect(toggleSidebarAction, &QAction::triggered, this, &MainWindow::toggleSidebar);
 
     m_togglePreviewAction = viewMenu->addAction(tr("Toggle &Preview"));
     m_togglePreviewAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V));
@@ -383,6 +381,13 @@ void MainWindow::setupToolBar()
     m_toolBar->setObjectName("MainToolbar");
     m_toolBar->setMovable(false);
     m_toolBar->setIconSize(QSize(18, 18));
+
+    // Sidebar toggle button (left-aligned)
+    QAction *toggleSidebarAction = new QAction(tr("📂 Sidebar"), this);
+    toggleSidebarAction->setToolTip(tr("Toggle Sidebar (Ctrl+Shift+B)"));
+    connect(toggleSidebarAction, &QAction::triggered, this, &MainWindow::toggleSidebar);
+    m_toolBar->addAction(toggleSidebarAction);
+    m_toolBar->addSeparator();
 
     // Text formatting buttons
     auto addFormatAction = [&](const QString &label, const QString &tooltip, auto slot) {
@@ -1411,6 +1416,18 @@ void MainWindow::onOutlineHeadingClicked(const QModelIndex &index)
         m_outlineView->setCurrentIndex(index);
         
         editor->setFocus();
+    }
+}
+
+void MainWindow::toggleSidebar()
+{
+    if (m_sidebarDock && m_outlineDock) {
+        bool eitherVisible = m_sidebarDock->isVisible() || m_outlineDock->isVisible();
+        m_sidebarDock->setVisible(!eitherVisible);
+        m_outlineDock->setVisible(!eitherVisible);
+        if (!eitherVisible) {
+            m_sidebarDock->raise();
+        }
     }
 }
 
