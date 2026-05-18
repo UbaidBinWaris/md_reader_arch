@@ -38,3 +38,5 @@ moc_*.cpp
 *.swp
 *~
 .DS_Store
+.venv
+*.pyc

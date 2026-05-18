@@ -28,6 +28,7 @@ set(SOURCES
     src/ui/MainWindow.cpp
     src/ui/TabManager.cpp
     src/ui/WindowManager.cpp
+    src/ui/PrintOptionsDialog.cpp
     src/ui/Dashboard.cpp
     src/ui/CommandPalette.cpp
     src/editor/Editor.cpp

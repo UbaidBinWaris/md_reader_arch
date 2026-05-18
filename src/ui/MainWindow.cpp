@@ -17,6 +17,10 @@
 #include "CommandPalette.h"
 #include "TabManager.h"
 #include "Logger.h"
+#include "PrintOptionsDialog.h"
+#include <QPrinter>
+#include <QPrintDialog>
+#include <QTextDocument>
 
 #include <QMenuBar>
 #include <QToolBar>
@@ -268,6 +272,12 @@ void MainWindow::setupMenuBar()
     QMenu *exportMenu = fileMenu->addMenu(tr("&Export"));
     exportMenu->addAction(tr("Export as &PDF..."), this, &MainWindow::onExportPDF);
     exportMenu->addAction(tr("Export as &HTML..."), this, &MainWindow::onExportHTML);
+
+    fileMenu->addSeparator();
+
+    QAction *printAction = fileMenu->addAction(tr("&Print Options..."), this, &MainWindow::onPrintOptions);
+    printAction->setShortcut(QKeySequence::Print);
+    printAction->setIcon(style()->standardIcon(QStyle::SP_ComputerIcon));
 
     fileMenu->addSeparator();
 
@@ -689,16 +699,123 @@ void MainWindow::onSaveFileAs()
     auto *editor = currentEditor();
     if (!editor) return;
 
+    QString selectedFilter = tr("PDF Files (*.pdf)"); // Default to PDF
     QString filePath = QFileDialog::getSaveFileName(this,
-        tr("Save Markdown File"), QString(),
-        tr("Markdown Files (*.md);;All Files (*)"));
+        tr("Save File As"),
+        QString(),
+        tr("PDF Files (*.pdf);;HTML Files (*.html);;Markdown Files (*.md);;All Files (*)"),
+        &selectedFilter);
 
     if (filePath.isEmpty()) return;
 
-    editor->setProperty("filePath", filePath);
-    m_tabWidget->setTabText(m_tabWidget->currentIndex(), QFileInfo(filePath).fileName());
+    if (selectedFilter.contains("pdf", Qt::CaseInsensitive) || filePath.endsWith(".pdf", Qt::CaseInsensitive)) {
+        if (!filePath.endsWith(".pdf", Qt::CaseInsensitive)) {
+            filePath += ".pdf";
+        }
 
-    onSaveFile();
+        // Write markdown to a temporary file
+        QString tempMdPath = QDir::tempPath() + "/nanomark_export_temp.md";
+        QFile tempFile(tempMdPath);
+        if (!tempFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QMessageBox::warning(this, tr("Export Error"), tr("Failed to create temporary export file."));
+            return;
+        }
+        tempFile.write(editor->toPlainText().toUtf8());
+        tempFile.close();
+
+        // Find the correct Python executable (.venv or system python)
+        QString projectDir = QCoreApplication::applicationDirPath() + "/..";
+        if (!QFile::exists(projectDir + "/microservices/pdf_service/service.py")) {
+            projectDir = QCoreApplication::applicationDirPath() + "/../..";
+        }
+        if (!QFile::exists(projectDir + "/microservices/pdf_service/service.py")) {
+            projectDir = QDir::currentPath();
+        }
+
+        QString pythonPath = projectDir + "/.venv/bin/python";
+        if (!QFile::exists(pythonPath)) {
+            pythonPath = "python3";
+        }
+
+        QString scriptPath = projectDir + "/microservices/pdf_service/service.py";
+
+        QStringList arguments;
+        arguments << scriptPath << "--cli" << "--input" << tempMdPath << "--output" << filePath << "--type" << "pdf";
+
+        QProcess process;
+        process.start(pythonPath, arguments);
+        if (process.waitForFinished(15000)) {
+            QFile::remove(tempMdPath);
+            if (process.exitCode() == 0) {
+                statusBar()->showMessage(tr("Exported to PDF: %1").arg(filePath), 3000);
+            } else {
+                QString errorOutput = process.readAllStandardError();
+                QMessageBox::warning(this, tr("Export Error"), 
+                    tr("Python export failed:\n%1").arg(errorOutput));
+            }
+        } else {
+            QFile::remove(tempMdPath);
+            QMessageBox::warning(this, tr("Export Error"), tr("Export process timed out."));
+        }
+
+    } else if (selectedFilter.contains("html", Qt::CaseInsensitive) || filePath.endsWith(".html", Qt::CaseInsensitive)) {
+        if (!filePath.endsWith(".html", Qt::CaseInsensitive)) {
+            filePath += ".html";
+        }
+
+        // Write markdown to a temporary file
+        QString tempMdPath = QDir::tempPath() + "/nanomark_export_temp.md";
+        QFile tempFile(tempMdPath);
+        if (!tempFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QMessageBox::warning(this, tr("Export Error"), tr("Failed to create temporary export file."));
+            return;
+        }
+        tempFile.write(editor->toPlainText().toUtf8());
+        tempFile.close();
+
+        // Find the correct Python executable (.venv or system python)
+        QString projectDir = QCoreApplication::applicationDirPath() + "/..";
+        if (!QFile::exists(projectDir + "/microservices/pdf_service/service.py")) {
+            projectDir = QCoreApplication::applicationDirPath() + "/../..";
+        }
+        if (!QFile::exists(projectDir + "/microservices/pdf_service/service.py")) {
+            projectDir = QDir::currentPath();
+        }
+
+        QString pythonPath = projectDir + "/.venv/bin/python";
+        if (!QFile::exists(pythonPath)) {
+            pythonPath = "python3";
+        }
+
+        QString scriptPath = projectDir + "/microservices/pdf_service/service.py";
+
+        QStringList arguments;
+        arguments << scriptPath << "--cli" << "--input" << tempMdPath << "--output" << filePath << "--type" << "html";
+
+        QProcess process;
+        process.start(pythonPath, arguments);
+        if (process.waitForFinished(15000)) {
+            QFile::remove(tempMdPath);
+            if (process.exitCode() == 0) {
+                statusBar()->showMessage(tr("Exported to HTML: %1").arg(filePath), 3000);
+            } else {
+                QString errorOutput = process.readAllStandardError();
+                QMessageBox::warning(this, tr("Export Error"), 
+                    tr("Python export failed:\n%1").arg(errorOutput));
+            }
+        } else {
+            QFile::remove(tempMdPath);
+            QMessageBox::warning(this, tr("Export Error"), tr("Export process timed out."));
+        }
+
+    } else {
+        if (selectedFilter.contains("md", Qt::CaseInsensitive) && !filePath.endsWith(".md", Qt::CaseInsensitive)) {
+            filePath += ".md";
+        }
+        editor->setProperty("filePath", filePath);
+        m_tabWidget->setTabText(m_tabWidget->currentIndex(), QFileInfo(filePath).fileName());
+        onSaveFile();
+    }
 }
 
 void MainWindow::onExportPDF()
@@ -711,7 +828,6 @@ void MainWindow::onExportPDF()
 
     if (filePath.isEmpty()) return;
 
-    // Use Python PDF script for perfect rendering!
     // Write markdown to a temporary file
     QString tempMdPath = QDir::tempPath() + "/nanomark_export_temp.md";
     QFile tempFile(tempMdPath);
@@ -769,7 +885,7 @@ void MainWindow::onExportHTML()
 
     if (filePath.isEmpty()) return;
 
-    // Use Python script for premium HTML formatting!
+    // Write markdown to a temporary file
     QString tempMdPath = QDir::tempPath() + "/nanomark_export_temp.md";
     QFile tempFile(tempMdPath);
     if (!tempFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
@@ -811,6 +927,232 @@ void MainWindow::onExportHTML()
     } else {
         QFile::remove(tempMdPath);
         QMessageBox::warning(this, tr("Export Error"), tr("Export process timed out."));
+    }
+}
+
+void MainWindow::onPrintOptions()
+{
+    auto *editor = currentEditor();
+    if (!editor) return;
+
+    PrintOptionsDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted) return;
+
+    PrintOptions opts = dialog.options();
+    PrintTarget target = dialog.selectedTarget();
+
+    // 1. Build custom CSS override based on user configurations
+    QString sizeStr = opts.paperSize; // "A4", "Letter", etc.
+    QString orientStr = opts.orientation.toLower(); // "portrait", "landscape"
+
+    // Normalize margin sizing
+    QString marginStr = "20mm 15mm 20mm 15mm"; // Default Normal
+    if (opts.margins == "Narrow") {
+        marginStr = "10mm 10mm 10mm 10mm";
+    } else if (opts.margins == "Wide") {
+        marginStr = "30mm 30mm 30mm 30mm";
+    }
+
+    QString customCss = QString(
+        "@page {\n"
+        "    size: %1 %2;\n"
+        "    margin: %3;\n"
+        "}\n"
+    ).arg(sizeStr).arg(orientStr).arg(marginStr);
+
+    // Apply color filters
+    if (opts.colorMode == "Grayscale") {
+        customCss += "\nbody { filter: grayscale(100%); }\n";
+    } else if (opts.colorMode == "Black & White") {
+        customCss += "\nbody { filter: grayscale(100%) contrast(1000%); }\n"
+                     "* { color: #000000 !important; background-color: #ffffff !important; border-color: #000000 !important; }\n";
+    }
+
+    // Write custom CSS to a temporary file
+    QString tempCssPath = QDir::tempPath() + "/nanomark_print_temp.css";
+    QFile cssFile(tempCssPath);
+    if (cssFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        cssFile.write(customCss.toUtf8());
+        cssFile.close();
+    }
+
+    if (target == TargetPDF) {
+        // --- Export PDF ---
+        QString filePath = QFileDialog::getSaveFileName(this,
+            tr("Export PDF"), QString(), tr("PDF Files (*.pdf)"));
+        if (filePath.isEmpty()) {
+            QFile::remove(tempCssPath);
+            return;
+        }
+        if (!filePath.endsWith(".pdf", Qt::CaseInsensitive)) {
+            filePath += ".pdf";
+        }
+
+        // Write markdown to a temporary file
+        QString tempMdPath = QDir::tempPath() + "/nanomark_export_temp.md";
+        QFile tempFile(tempMdPath);
+        if (!tempFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QMessageBox::warning(this, tr("Export Error"), tr("Failed to create temporary export file."));
+            QFile::remove(tempCssPath);
+            return;
+        }
+        tempFile.write(editor->toPlainText().toUtf8());
+        tempFile.close();
+
+        QString projectDir = QCoreApplication::applicationDirPath() + "/..";
+        if (!QFile::exists(projectDir + "/microservices/pdf_service/service.py")) {
+            projectDir = QCoreApplication::applicationDirPath() + "/../..";
+        }
+        if (!QFile::exists(projectDir + "/microservices/pdf_service/service.py")) {
+            projectDir = QDir::currentPath();
+        }
+
+        QString pythonPath = projectDir + "/.venv/bin/python";
+        if (!QFile::exists(pythonPath)) {
+            pythonPath = "python3";
+        }
+
+        QString scriptPath = projectDir + "/microservices/pdf_service/service.py";
+        QStringList arguments;
+        arguments << scriptPath << "--cli" << "--input" << tempMdPath << "--output" << filePath << "--type" << "pdf" << "--css" << tempCssPath;
+
+        QProcess process;
+        process.start(pythonPath, arguments);
+        if (process.waitForFinished(15000)) {
+            QFile::remove(tempMdPath);
+            QFile::remove(tempCssPath);
+            if (process.exitCode() == 0) {
+                statusBar()->showMessage(tr("Exported Custom PDF: %1").arg(filePath), 3000);
+            } else {
+                QString errorOutput = process.readAllStandardError();
+                QMessageBox::warning(this, tr("Export Error"), 
+                    tr("Python export failed:\n%1").arg(errorOutput));
+            }
+        } else {
+            QFile::remove(tempMdPath);
+            QFile::remove(tempCssPath);
+            QMessageBox::warning(this, tr("Export Error"), tr("Export process timed out."));
+        }
+
+    } else if (target == TargetHTML) {
+        // --- Export HTML ---
+        QString filePath = QFileDialog::getSaveFileName(this,
+            tr("Export HTML"), QString(), tr("HTML Files (*.html)"));
+        if (filePath.isEmpty()) {
+            QFile::remove(tempCssPath);
+            return;
+        }
+        if (!filePath.endsWith(".html", Qt::CaseInsensitive)) {
+            filePath += ".html";
+        }
+
+        // Write markdown to a temporary file
+        QString tempMdPath = QDir::tempPath() + "/nanomark_export_temp.md";
+        QFile tempFile(tempMdPath);
+        if (!tempFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QMessageBox::warning(this, tr("Export Error"), tr("Failed to create temporary export file."));
+            QFile::remove(tempCssPath);
+            return;
+        }
+        tempFile.write(editor->toPlainText().toUtf8());
+        tempFile.close();
+
+        QString projectDir = QCoreApplication::applicationDirPath() + "/..";
+        if (!QFile::exists(projectDir + "/microservices/pdf_service/service.py")) {
+            projectDir = QCoreApplication::applicationDirPath() + "/../..";
+        }
+        if (!QFile::exists(projectDir + "/microservices/pdf_service/service.py")) {
+            projectDir = QDir::currentPath();
+        }
+
+        QString pythonPath = projectDir + "/.venv/bin/python";
+        if (!QFile::exists(pythonPath)) {
+            pythonPath = "python3";
+        }
+
+        QString scriptPath = projectDir + "/microservices/pdf_service/service.py";
+        QStringList arguments;
+        arguments << scriptPath << "--cli" << "--input" << tempMdPath << "--output" << filePath << "--type" << "html" << "--css" << tempCssPath;
+
+        QProcess process;
+        process.start(pythonPath, arguments);
+        if (process.waitForFinished(15000)) {
+            QFile::remove(tempMdPath);
+            QFile::remove(tempCssPath);
+            if (process.exitCode() == 0) {
+                statusBar()->showMessage(tr("Exported Custom HTML: %1").arg(filePath), 3000);
+            } else {
+                QString errorOutput = process.readAllStandardError();
+                QMessageBox::warning(this, tr("Export Error"), 
+                    tr("Python export failed:\n%1").arg(errorOutput));
+            }
+        } else {
+            QFile::remove(tempMdPath);
+            QFile::remove(tempCssPath);
+            QMessageBox::warning(this, tr("Export Error"), tr("Export process timed out."));
+        }
+
+    } else if (target == TargetPrint) {
+        // --- Direct Print via System Drivers ---
+        QPrinter printer(QPrinter::HighResolution);
+
+        // Match Page Size
+        if (opts.paperSize == "A4") printer.setPageSize(QPageSize(QPageSize::A4));
+        else if (opts.paperSize == "Letter") printer.setPageSize(QPageSize(QPageSize::Letter));
+        else if (opts.paperSize == "A3") printer.setPageSize(QPageSize(QPageSize::A3));
+        else if (opts.paperSize == "A5") printer.setPageSize(QPageSize(QPageSize::A5));
+        else if (opts.paperSize == "Legal") printer.setPageSize(QPageSize(QPageSize::Legal));
+
+        // Match Page Orientation
+        if (opts.orientation == "Landscape") {
+            printer.setPageLayout(QPageLayout(printer.pageLayout().pageSize(), QPageLayout::Landscape, printer.pageLayout().margins()));
+        } else {
+            printer.setPageLayout(QPageLayout(printer.pageLayout().pageSize(), QPageLayout::Portrait, printer.pageLayout().margins()));
+        }
+
+        // Match Margins
+        qreal m = 20.0;
+        if (opts.margins == "Narrow") m = 10.0;
+        else if (opts.margins == "Wide") m = 30.0;
+        printer.setPageMargins(QMarginsF(m, m, m, m), QPageLayout::Millimeter);
+
+        // Match Color Mode
+        if (opts.colorMode == "Grayscale" || opts.colorMode == "Black & White") {
+            printer.setColorMode(QPrinter::GrayScale);
+        } else {
+            printer.setColorMode(QPrinter::Color);
+        }
+
+        QPrintDialog printDialog(&printer, this);
+        if (printDialog.exec() == QDialog::Accepted) {
+            // Render styled HTML and load into QTextDocument for native system printing
+            QString rawBody = m_renderer->renderBody(editor->toPlainText());
+
+            // Build full HTML with style sheet
+            QString fullHtml = QString(
+                "<!DOCTYPE html>\n"
+                "<html>\n"
+                "<head>\n"
+                "    <meta charset=\"utf-8\">\n"
+                "    <style>\n"
+                "        body { font-family: sans-serif; line-height: 1.6; }\n"
+                "        %1\n"
+                "    </style>\n"
+                "</head>\n"
+                "<body>\n"
+                "    %2\n"
+                "</body>\n"
+                "</html>\n"
+            ).arg(customCss).arg(rawBody);
+
+            QTextDocument doc;
+            doc.setHtml(fullHtml);
+
+            statusBar()->showMessage(tr("Printing via system drivers..."), 2000);
+            doc.print(&printer);
+            statusBar()->showMessage(tr("Print job successfully sent!"), 3000);
+        }
+        QFile::remove(tempCssPath);
     }
 }
 

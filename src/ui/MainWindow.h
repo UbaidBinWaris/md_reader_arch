@@ -65,6 +65,7 @@ private slots:
     void onSaveFileAs();
     void onExportPDF();
     void onExportHTML();
+    void onPrintOptions();
     void onTabChanged(int index);
     void onTabCreated(int index);
     void onTabCloseRequested(int index);
