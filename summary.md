@@ -85,6 +85,9 @@ tests/         CMakeLists.txt, test_renderer.cpp
 - **Interactive Outline & Scroll Sync**: Coordinates two-way scroll synchronization, promptless startup recoveries, and active reading section tracking. Exposes the viewport-top scroll alignment logic (`setValue(maximum())` followed by `ensureCursorVisible()`) to scroll editor text perfectly to the top edge on heading double-clicks.
 - **View Layout State Persistence**: Saves the exact visibility state of the preview pane (`isPreviewVisible`) in SQLite and restores it on startup, resolving startup layout glitches.
 - **Lockstep Toggle Synchronizations**: Exposes checkable menu actions (`m_toggleStudyAction`, `m_togglePreviewAction`) and binds their check states in absolute phase-lockstep with backend variables, enabling `Ctrl + E` to toggle Study Mode instantly on the very first keystroke after starting in editor-only mode.
+- **Authoritative Window Close Lifecycle**: Cleaned up startup race conditions by removing `saveWindowState` from `~MainWindow()`, letting a single, clean `closeEvent()` authoritative flow save tab sessions perfectly without teardown resets (resolving the "0 tabs saved" database bug).
+- **Strict Restoration Order Pipeline**: Executes a strictly ordered, event-locked asynchronous session restoration pipeline (`layout ➔ tabs & editors ➔ text cursors ➔ scrollbars ➔ outline ➔ preview`). Debounces and paint triggers are disabled using `m_isRestoringSession` locks, and vertical scrollbar application is deferred by 50ms to ensure editor document layouts have finished computing.
+- **View-Only Study Mode & Mode-Switch Autosaving**: Locks all editors to read-only (`setReadOnly(true)`) while Study Mode is active. Before swapping layouts inside `onToggleStudyMode()`, the active editor's file is cleanly saved to disk (using `onSaveFile()` if it has a file path, or `forceAutosave()` if Untitled), completely avoiding data loss.
 
 ---
 
@@ -143,6 +146,7 @@ tests/         CMakeLists.txt, test_renderer.cpp
 - **Tracking**: Correctly tracks and saves unsaved "Untitled" documents. Connects to `QPlainTextEdit::textChanged`.
 - **Metadata**: Embeds original file paths directly inside the backup file for seamless restoration.
 - **Cleanup**: Removes backup files upon successful manual save or clean close.
+- **Autosave-Disabled Study Mode**: Skips markDirty and processAutosaves processing entirely for any read-only editor, ensuring zero background disk I/O occurs when users are strictly reading in Study Mode.
 
 ---
 

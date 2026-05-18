@@ -58,6 +58,7 @@ void AutosaveManager::unwatchEditor(Editor *editor, bool cleanUp)
 void AutosaveManager::markDirty(Editor *editor)
 {
     if (m_watchedEditors.contains(editor)) {
+        if (editor->isReadOnly()) return;
         m_watchedEditors[editor].isDirty = true;
         m_debounceTimer->start(200); // 200ms debounce: triggers autosave instantly when you pause typing!
     }
@@ -68,6 +69,10 @@ void AutosaveManager::processAutosaves()
     for (auto it = m_watchedEditors.begin(); it != m_watchedEditors.end(); ++it) {
         Editor *editor = it.key();
         AutosaveInfo &info = it.value();
+        
+        if (editor->isReadOnly()) {
+            continue;
+        }
         
         if (info.isDirty || editor->document()->isModified()) {
             saveRecovery(editor, info);

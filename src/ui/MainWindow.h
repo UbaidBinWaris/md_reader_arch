@@ -19,6 +19,8 @@ class QLineEdit;
 class QStandardItemModel;
 class QSortFilterProxyModel;
 class QAction;
+class QToolBar;
+class QTabBar;
 
 namespace NanoMark {
 
@@ -91,6 +93,7 @@ private:
     void syncOutlineHighlight();
     void updateWindowTitle();
     void saveWindowState();
+    void updateStudyTabBar();
     void restoreWindowState();
     void updateWorkspaceVisibility();
 
@@ -98,6 +101,7 @@ private:
     QStackedWidget *m_stack = nullptr;
     QSplitter *m_splitter = nullptr;
     QTabWidget *m_tabWidget = nullptr;
+    QTabBar *m_studyTabBar = nullptr;
     Dashboard *m_dashboard = nullptr;
     PreviewPane *m_previewPane = nullptr;
     CommandPalette *m_commandPalette = nullptr;
@@ -110,6 +114,7 @@ private:
     QSortFilterProxyModel *m_outlineFilterProxyModel = nullptr;
     QAction *m_toggleStudyAction = nullptr;
     QAction *m_togglePreviewAction = nullptr;
+    QToolBar *m_toolBar = nullptr;
 
     // Status bar labels
     QLabel *m_lineColLabel = nullptr;

@@ -20,6 +20,7 @@
 
 #include <QMenuBar>
 #include <QToolBar>
+#include <QTabBar>
 #include <QStatusBar>
 #include <QFileDialog>
 #include <QMessageBox>
@@ -122,12 +123,34 @@ void MainWindow::setupUI()
 
     m_previewPane = new PreviewPane(this);
 
+    m_studyTabBar = new QTabBar(this);
+    m_studyTabBar->setTabsClosable(true);
+    m_studyTabBar->setMovable(false);
+    m_studyTabBar->hide(); // Hidden by default (only visible in Study Mode)
+
+    connect(m_studyTabBar, &QTabBar::currentChanged, this, [this](int idx) {
+        if (idx >= 0 && idx < m_tabWidget->count() && idx != m_tabWidget->currentIndex()) {
+            m_tabWidget->setCurrentIndex(idx);
+        }
+    });
+
+    connect(m_studyTabBar, &QTabBar::tabCloseRequested, this, [this](int idx) {
+        onTabCloseRequested(idx);
+    });
+
     m_splitter->addWidget(m_tabWidget);
     m_splitter->addWidget(m_previewPane);
     m_splitter->setSizes({650, 650});
     m_splitter->setHandleWidth(2);
     
-    m_stack->addWidget(m_splitter);
+    QWidget *workspaceContainer = new QWidget(this);
+    QVBoxLayout *workspaceLayout = new QVBoxLayout(workspaceContainer);
+    workspaceLayout->setContentsMargins(0, 0, 0, 0);
+    workspaceLayout->setSpacing(0);
+    workspaceLayout->addWidget(m_studyTabBar);
+    workspaceLayout->addWidget(m_splitter);
+
+    m_stack->addWidget(workspaceContainer);
 
     setCentralWidget(m_stack);
     updateWorkspaceVisibility();
@@ -162,12 +185,57 @@ void MainWindow::setupUI()
 void MainWindow::updateWorkspaceVisibility()
 {
     if (m_tabWidget->count() == 0) {
-        m_stack->setCurrentWidget(m_dashboard);
-        if (m_sidebarDock) m_sidebarDock->hide();
+        if (m_isStudyMode) {
+            m_stack->setCurrentWidget(m_splitter->parentWidget());
+            if (m_sidebarDock) m_sidebarDock->hide();
+        } else {
+            m_stack->setCurrentWidget(m_dashboard);
+            if (m_sidebarDock) m_sidebarDock->hide();
+        }
     } else {
-        m_stack->setCurrentWidget(m_splitter);
+        m_stack->setCurrentWidget(m_splitter->parentWidget());
         if (m_sidebarDock) m_sidebarDock->show();
     }
+}
+
+void MainWindow::updateStudyTabBar()
+{
+    if (!m_studyTabBar) return;
+
+    if (m_tabWidget->count() == 0) {
+        m_studyTabBar->hide();
+        return;
+    } else if (m_isStudyMode) {
+        m_studyTabBar->show();
+    }
+
+    m_studyTabBar->blockSignals(true);
+
+    // 1. Remove extra tabs
+    while (m_studyTabBar->count() > m_tabWidget->count()) {
+        m_studyTabBar->removeTab(m_studyTabBar->count() - 1);
+    }
+
+    // 2. Add or update tabs to match m_tabWidget exactly
+    for (int i = 0; i < m_tabWidget->count(); ++i) {
+        QString text = m_tabWidget->tabText(i);
+        QIcon icon = m_tabWidget->tabIcon(i);
+        QString tooltip = m_tabWidget->tabToolTip(i);
+
+        if (i < m_studyTabBar->count()) {
+            m_studyTabBar->setTabText(i, text);
+            m_studyTabBar->setTabIcon(i, icon);
+            m_studyTabBar->setTabToolTip(i, tooltip);
+        } else {
+            m_studyTabBar->addTab(icon, text);
+            m_studyTabBar->setTabToolTip(m_studyTabBar->count() - 1, tooltip);
+        }
+    }
+
+    // 3. Set current active tab index
+    m_studyTabBar->setCurrentIndex(m_tabWidget->currentIndex());
+
+    m_studyTabBar->blockSignals(false);
 }
 
 void MainWindow::setupMenuBar()
@@ -285,14 +353,14 @@ void MainWindow::setupMenuBar()
 
 void MainWindow::setupToolBar()
 {
-    QToolBar *toolbar = addToolBar(tr("Markdown"));
-    toolbar->setObjectName("MainToolbar");
-    toolbar->setMovable(false);
-    toolbar->setIconSize(QSize(18, 18));
+    m_toolBar = addToolBar(tr("Markdown"));
+    m_toolBar->setObjectName("MainToolbar");
+    m_toolBar->setMovable(false);
+    m_toolBar->setIconSize(QSize(18, 18));
 
     // Text formatting buttons
     auto addFormatAction = [&](const QString &label, const QString &tooltip, auto slot) {
-        QAction *action = toolbar->addAction(label);
+        QAction *action = m_toolBar->addAction(label);
         action->setToolTip(tooltip);
         connect(action, &QAction::triggered, this, slot);
     };
@@ -307,7 +375,7 @@ void MainWindow::setupToolBar()
         if (auto *e = currentEditor()) e->insertFormatting("### ", "");
     });
 
-    toolbar->addSeparator();
+    m_toolBar->addSeparator();
 
     addFormatAction("B", "Bold (Ctrl+B)", [this]() {
         if (auto *e = currentEditor()) e->wrapSelection("**", "**");
@@ -322,7 +390,7 @@ void MainWindow::setupToolBar()
         if (auto *e = currentEditor()) e->wrapSelection("`", "`");
     });
 
-    toolbar->addSeparator();
+    m_toolBar->addSeparator();
 
     addFormatAction("• List", "Unordered List", [this]() {
         if (auto *e = currentEditor()) e->insertFormatting("- ", "");
@@ -334,7 +402,7 @@ void MainWindow::setupToolBar()
         if (auto *e = currentEditor()) e->insertFormatting("- [ ] ", "");
     });
 
-    toolbar->addSeparator();
+    m_toolBar->addSeparator();
 
     addFormatAction("Link", "Insert Link", [this]() {
         if (auto *e = currentEditor()) e->wrapSelection("[", "](url)");
@@ -352,7 +420,7 @@ void MainWindow::setupToolBar()
         if (auto *e = currentEditor()) e->wrapSelection("```\n", "\n```");
     });
 
-    toolbar->addSeparator();
+    m_toolBar->addSeparator();
 
     addFormatAction("> Quote", "Blockquote", [this]() {
         if (auto *e = currentEditor()) e->insertFormatting("> ", "");
@@ -503,6 +571,10 @@ void MainWindow::onTabCreated(int idx)
     auto *editor = m_tabManager->editorAt(idx);
     if (!editor) return;
 
+    if (m_isStudyMode) {
+        editor->setReadOnly(true);
+    }
+
     connect(editor, &QPlainTextEdit::textChanged,
             this, &MainWindow::onEditorTextChanged);
     connect(editor, &QPlainTextEdit::cursorPositionChanged,
@@ -527,6 +599,7 @@ void MainWindow::onTabCreated(int idx)
     m_autosaveManager->watchEditor(editor, "");
 
     updateWorkspaceVisibility();
+    updateStudyTabBar();
     schedulePreviewUpdate();
 }
 
@@ -602,7 +675,9 @@ void MainWindow::onSaveFile()
     }
 
     editor->document()->setModified(false);
+    m_tabManager->markSaved(m_tabWidget->currentIndex());
     updateWindowTitle();
+    updateStudyTabBar();
     statusBar()->showMessage(tr("Saved: %1").arg(filePath), 3000);
 }
 
@@ -658,9 +733,19 @@ void MainWindow::onExportHTML()
 void MainWindow::onTabChanged(int index)
 {
     Q_UNUSED(index);
+    if (m_isStudyMode) {
+        if (auto *e = currentEditor()) {
+            e->setReadOnly(true);
+        }
+    } else {
+        if (auto *e = currentEditor()) {
+            e->setReadOnly(false);
+        }
+    }
     updatePreview();
     updateStatusBar();
     updateWindowTitle();
+    updateStudyTabBar();
 }
 
 void MainWindow::onTabCloseRequested(int index)
@@ -686,6 +771,8 @@ void MainWindow::onTabCloseRequested(int index)
     delete editor;
 
     updateWorkspaceVisibility();
+    updateStudyTabBar();
+    updatePreview();
 }
 
 void MainWindow::onEditorTextChanged()
@@ -696,6 +783,7 @@ void MainWindow::onEditorTextChanged()
     QString title = m_tabWidget->tabText(idx);
     if (!title.endsWith(" •")) {
         m_tabWidget->setTabText(idx, title + " •");
+        updateStudyTabBar();
     }
 
     if (auto *e = currentEditor()) {
@@ -708,6 +796,16 @@ void MainWindow::onEditorTextChanged()
 
 void MainWindow::onToggleStudyMode()
 {
+    // Auto-save the active editor's changes cleanly before moving between modes!
+    if (auto *e = currentEditor()) {
+        QString filePath = e->property("filePath").toString();
+        if (!filePath.isEmpty() && e->document()->isModified()) {
+            onSaveFile();
+        } else {
+            m_autosaveManager->forceAutosave();
+        }
+    }
+
     m_isStudyMode = !m_isStudyMode;
 
     if (m_toggleStudyAction) {
@@ -715,10 +813,18 @@ void MainWindow::onToggleStudyMode()
     }
 
     if (m_isStudyMode) {
-        // Study mode: hide editor tabs, show full-width preview
+        // Study mode: hide editor tabs, show full-width preview with top study tab bar
+        updateStudyTabBar();
+        if (m_studyTabBar) {
+            m_studyTabBar->show();
+        }
         m_tabWidget->hide();
         m_previewPane->show();
         m_modeLabel->setText("Study Mode");
+
+        if (m_toolBar) {
+            m_toolBar->hide();
+        }
 
         // Make the current editor read-only
         if (auto *e = currentEditor()) {
@@ -726,6 +832,9 @@ void MainWindow::onToggleStudyMode()
         }
     } else {
         // Developer/Edit mode: show split view matching saved preview visibility state
+        if (m_studyTabBar) {
+            m_studyTabBar->hide();
+        }
         m_tabWidget->show();
         if (m_togglePreviewAction) {
             m_previewPane->setVisible(m_togglePreviewAction->isChecked());
@@ -733,6 +842,10 @@ void MainWindow::onToggleStudyMode()
             m_previewPane->show();
         }
         m_modeLabel->setText("Developer Mode");
+
+        if (m_toolBar) {
+            m_toolBar->show();
+        }
 
         if (auto *e = currentEditor()) {
             e->setReadOnly(false);
@@ -866,7 +979,29 @@ void MainWindow::updatePreview()
     updateStatusBar();
 
     auto *editor = currentEditor();
-    if (!editor) return;
+    if (!editor) {
+        if (m_isStudyMode) {
+            bool isDark = ThemeManager::instance().currentTheme() == ThemeManager::Theme::Dark;
+            QString warningHtml = R"(
+<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: )" + QString(isDark ? "#e0e0e0" : "#333333") + R"(; padding: 20px; box-sizing: border-box; background-color: )" + QString(isDark ? "#0d0d0d" : "#ffffff") + R"(;">
+    <div style="font-size: 64px; margin-bottom: 24px; animation: pulse 2s infinite ease-in-out;">📖</div>
+    <h2 style="font-size: 28px; font-weight: 600; margin: 0 0 16px 0; letter-spacing: -0.5px;">No Active Documents to Study</h2>
+    <p style="font-size: 16px; line-height: 1.6; max-width: 480px; margin: 0 0 32px 0; color: )" + QString(isDark ? "#888888" : "#666666") + R"(;">
+        Your workspace is currently empty. Open a markdown file from the sidebar, press <b>Ctrl + P</b> to search files, or switch back to Developer Mode (<b>Ctrl + E</b>) to return to Edit Mode.
+    </p>
+    <style>
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.05); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.8; }
+        }
+    </style>
+</div>
+)";
+            m_previewPane->updatePreview(warningHtml, isDark, "");
+        }
+        return;
+    }
 
     QString markdown = editor->toPlainText();
 
@@ -1071,9 +1206,22 @@ void MainWindow::restoreWindowState()
     if (m_isStudyMode) {
         m_tabWidget->hide();
         m_previewPane->show();
+        if (m_studyTabBar) {
+            m_studyTabBar->show();
+            updateStudyTabBar();
+        }
+        if (m_toolBar) {
+            m_toolBar->hide();
+        }
     } else {
+        if (m_studyTabBar) {
+            m_studyTabBar->hide();
+        }
         m_tabWidget->show();
         m_previewPane->setVisible(isPreviewVisible);
+        if (m_toolBar) {
+            m_toolBar->show();
+        }
     }
 
     // Immediately display the window structure and dashboard (under 50ms startup!)
@@ -1136,6 +1284,7 @@ void MainWindow::restoreSessionAsync()
         
         m_isRestoringSession = false; // Unlock
         updateWorkspaceVisibility();
+        updateStudyTabBar();
         schedulePreviewUpdate();
         return;
     }
@@ -1190,6 +1339,10 @@ void MainWindow::restoreSessionAsync()
         for (int i = 0; i < m_tabManager->count(); ++i) {
             auto *editor = m_tabManager->editorAt(i);
             if (editor) {
+                if (m_isStudyMode) {
+                    editor->setReadOnly(true);
+                }
+
                 int line = editor->property("cursorLine").toInt();
                 int col = editor->property("cursorCol").toInt();
                 int scroll = editor->property("scrollPos").toInt();
@@ -1212,6 +1365,7 @@ void MainWindow::restoreSessionAsync()
         }
 
         updateWorkspaceVisibility();
+        updateStudyTabBar();
         
         // Step 3: Trigger one clean outline extraction and preview update
         updatePreview();
