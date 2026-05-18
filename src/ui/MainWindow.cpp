@@ -1397,7 +1397,15 @@ void MainWindow::onOutlineHeadingClicked(const QModelIndex &index)
         editor->verticalScrollBar()->setValue(editor->verticalScrollBar()->maximum());
         // Force Qt to scroll up to make the cursor visible, which aligns it perfectly at the top of the viewport!
         editor->ensureCursorVisible();
+
+        // Scroll slightly up (by 2 lines worth of height) to give breathing room in editor view!
+        int scrollVal = editor->verticalScrollBar()->value();
+        int step = editor->verticalScrollBar()->singleStep();
+        editor->verticalScrollBar()->setValue(qMax(0, scrollVal - step * 2));
         
+        // Scroll the preview pane exactly and smoothly to the clicked heading
+        m_previewPane->scrollToHeadingLine(lineNum);
+
         // Ensure the clicked outline tree item itself is perfectly scrolled and centered in view
         m_outlineView->scrollTo(index);
         m_outlineView->setCurrentIndex(index);

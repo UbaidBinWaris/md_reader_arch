@@ -335,6 +335,7 @@ QString MarkdownRenderer::getPreviewCss() const
             font-weight: 700;
             line-height: 1.3;
             letter-spacing: -0.02em;
+            scroll-margin-top: 60px;
         }
 
         body.dark h1, body.dark h2, body.dark h3 { color: #ffffff; }

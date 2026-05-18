@@ -32,6 +32,9 @@ public:
     /** Scroll the preview pane to a given percentage [0.0 - 1.0] */
     void scrollToPercentage(double percentage);
 
+    /** Scroll the preview pane to the heading corresponding to a given source line number */
+    void scrollToHeadingLine(int line);
+
     /** Export current content to PDF */
     void exportToPDF(const QString &filePath, const QString &html);
 

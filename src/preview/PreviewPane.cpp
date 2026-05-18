@@ -166,6 +166,13 @@ void PreviewPane::initWebEngine()
         }
     };
 
+    window.scrollToHeadingLine = function(line) {
+        var h = document.querySelector('[data-line="' + line + '"]');
+        if (h) {
+            h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    };
+
     window.getActiveHeadingLineNumber = function() {
         var headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
         var activeLine = -1;
@@ -394,6 +401,13 @@ void PreviewPane::scrollToPercentage(double percentage)
 {
     if (m_state != PreviewState::Ready) return;
     QString jsCall = QString("scrollToPercentage(%1);").arg(percentage);
+    m_webView->page()->runJavaScript(jsCall);
+}
+
+void PreviewPane::scrollToHeadingLine(int line)
+{
+    if (m_state != PreviewState::Ready) return;
+    QString jsCall = QString("if (window.scrollToHeadingLine) window.scrollToHeadingLine(%1);").arg(line);
     m_webView->page()->runJavaScript(jsCall);
 }
 
