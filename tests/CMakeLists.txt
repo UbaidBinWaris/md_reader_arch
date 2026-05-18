@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-find_package(Qt6 REQUIRED COMPONENTS Test Sql)
+find_package(Qt6 REQUIRED COMPONENTS Test Sql Svg)
 
 add_executable(test_renderer test_renderer.cpp)
 
@@ -10,6 +10,7 @@ target_link_libraries(test_renderer PRIVATE
     Qt6::Gui
     Qt6::Widgets
     Qt6::Sql
+    Qt6::Svg
 )
 
 target_include_directories(test_renderer PRIVATE

@@ -99,6 +99,7 @@ private:
     void updateStudyTabBar();
     void restoreWindowState();
     void updateWorkspaceVisibility();
+    void updateIcons();
 
     // UI Components
     QStackedWidget *m_stack = nullptr;

@@ -7,6 +7,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QIcon>
 
 namespace NanoMark {
 
@@ -31,6 +32,9 @@ public:
 
     /** Get preview CSS for current theme */
     QString previewCssPath() const;
+
+    /** Get themed SVG icon by name */
+    static QIcon icon(const QString &name);
 
 signals:
     void themeChanged(Theme theme);

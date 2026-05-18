@@ -17,6 +17,7 @@ find_package(Qt6 REQUIRED COMPONENTS
     WebEngineWidgets
     PrintSupport
     Sql
+    Svg
 )
 
 # Collect all source files
@@ -114,6 +115,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::WebEngineWidgets
     Qt6::PrintSupport
     Qt6::Sql
+    Qt6::Svg
 )
 
 # Compiler warnings

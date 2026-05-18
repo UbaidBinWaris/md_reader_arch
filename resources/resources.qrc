@@ -6,5 +6,38 @@
         <file>themes/light.qss</file>
         <file>logo/logo.svg</file>
         <file>logo/logo.png</file>
+        <file>icons/bold.svg</file>
+        <file>icons/book-open.svg</file>
+        <file>icons/check-square.svg</file>
+        <file>icons/chevron-down.svg</file>
+        <file>icons/chevron-right.svg</file>
+        <file>icons/clipboard.svg</file>
+        <file>icons/code.svg</file>
+        <file>icons/copy.svg</file>
+        <file>icons/eye.svg</file>
+        <file>icons/file.svg</file>
+        <file>icons/folder-open.svg</file>
+        <file>icons/heading-1.svg</file>
+        <file>icons/heading-2.svg</file>
+        <file>icons/heading-3.svg</file>
+        <file>icons/help-circle.svg</file>
+        <file>icons/image.svg</file>
+        <file>icons/italic.svg</file>
+        <file>icons/link.svg</file>
+        <file>icons/list-ordered.svg</file>
+        <file>icons/list.svg</file>
+        <file>icons/minus.svg</file>
+        <file>icons/palette.svg</file>
+        <file>icons/printer.svg</file>
+        <file>icons/quote.svg</file>
+        <file>icons/redo.svg</file>
+        <file>icons/save.svg</file>
+        <file>icons/scissors.svg</file>
+        <file>icons/search.svg</file>
+        <file>icons/sidebar.svg</file>
+        <file>icons/strikethrough.svg</file>
+        <file>icons/table.svg</file>
+        <file>icons/terminal.svg</file>
+        <file>icons/undo.svg</file>
     </qresource>
 </RCC>

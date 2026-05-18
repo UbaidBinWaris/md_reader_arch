@@ -257,20 +257,25 @@ void MainWindow::setupMenuBar()
 
     QAction *newAction = fileMenu->addAction(tr("&New"), this, &MainWindow::onNewFile);
     newAction->setShortcut(QKeySequence::New);
-    newAction->setIcon(style()->standardIcon(QStyle::SP_FileIcon));
+    newAction->setIcon(ThemeManager::icon("file"));
+    newAction->setObjectName("actionNew");
 
     QAction *openAction = fileMenu->addAction(tr("&Open..."), this, &MainWindow::onOpenFile);
     openAction->setShortcut(QKeySequence::Open);
-    openAction->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
+    openAction->setIcon(ThemeManager::icon("folder-open"));
+    openAction->setObjectName("actionOpen");
 
     fileMenu->addSeparator();
 
     QAction *saveAction = fileMenu->addAction(tr("&Save"), this, &MainWindow::onSaveFile);
     saveAction->setShortcut(QKeySequence::Save);
-    saveAction->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
+    saveAction->setIcon(ThemeManager::icon("save"));
+    saveAction->setObjectName("actionSave");
 
     QAction *saveAsAction = fileMenu->addAction(tr("Save &As..."), this, &MainWindow::onSaveFileAs);
     saveAsAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_S));
+    saveAsAction->setIcon(ThemeManager::icon("save"));
+    saveAsAction->setObjectName("actionSaveAs");
 
     fileMenu->addSeparator();
 
@@ -282,7 +287,8 @@ void MainWindow::setupMenuBar()
 
     QAction *printAction = fileMenu->addAction(tr("&Print Options..."), this, &MainWindow::onPrintOptions);
     printAction->setShortcut(QKeySequence::Print);
-    printAction->setIcon(style()->standardIcon(QStyle::SP_ComputerIcon));
+    printAction->setIcon(ThemeManager::icon("printer"));
+    printAction->setObjectName("actionPrint");
 
     fileMenu->addSeparator();
 
@@ -294,12 +300,16 @@ void MainWindow::setupMenuBar()
 
     QAction *undoAction = editMenu->addAction(tr("&Undo"));
     undoAction->setShortcut(QKeySequence::Undo);
+    undoAction->setIcon(ThemeManager::icon("undo"));
+    undoAction->setObjectName("actionUndo");
     connect(undoAction, &QAction::triggered, this, [this]() {
         if (auto *e = currentEditor()) e->undo();
     });
 
     QAction *redoAction = editMenu->addAction(tr("&Redo"));
     redoAction->setShortcut(QKeySequence::Redo);
+    redoAction->setIcon(ThemeManager::icon("redo"));
+    redoAction->setObjectName("actionRedo");
     connect(redoAction, &QAction::triggered, this, [this]() {
         if (auto *e = currentEditor()) e->redo();
     });
@@ -308,18 +318,24 @@ void MainWindow::setupMenuBar()
 
     QAction *cutAction = editMenu->addAction(tr("Cu&t"));
     cutAction->setShortcut(QKeySequence::Cut);
+    cutAction->setIcon(ThemeManager::icon("scissors"));
+    cutAction->setObjectName("actionCut");
     connect(cutAction, &QAction::triggered, this, [this]() {
         if (auto *e = currentEditor()) e->cut();
     });
 
     QAction *copyAction = editMenu->addAction(tr("&Copy"));
     copyAction->setShortcut(QKeySequence::Copy);
+    copyAction->setIcon(ThemeManager::icon("copy"));
+    copyAction->setObjectName("actionCopy");
     connect(copyAction, &QAction::triggered, this, [this]() {
         if (auto *e = currentEditor()) e->copy();
     });
 
     QAction *pasteAction = editMenu->addAction(tr("&Paste"));
     pasteAction->setShortcut(QKeySequence::Paste);
+    pasteAction->setIcon(ThemeManager::icon("clipboard"));
+    pasteAction->setObjectName("actionPaste");
     connect(pasteAction, &QAction::triggered, this, [this]() {
         if (auto *e = currentEditor()) e->paste();
     });
@@ -328,6 +344,8 @@ void MainWindow::setupMenuBar()
 
     QAction *findAction = editMenu->addAction(tr("&Find && Replace..."), this, &MainWindow::onFindReplace);
     findAction->setShortcut(QKeySequence::Find);
+    findAction->setIcon(ThemeManager::icon("search"));
+    findAction->setObjectName("actionFind");
 
     // ── View Menu ──
     QMenu *viewMenu = menuBar()->addMenu(tr("&View"));
@@ -335,20 +353,28 @@ void MainWindow::setupMenuBar()
     m_toggleStudyAction = viewMenu->addAction(tr("Toggle &Study Mode"), this, &MainWindow::onToggleStudyMode);
     m_toggleStudyAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_E));
     m_toggleStudyAction->setCheckable(true);
+    m_toggleStudyAction->setIcon(ThemeManager::icon("book-open"));
+    m_toggleStudyAction->setObjectName("actionStudy");
 
     QAction *toggleThemeAction = viewMenu->addAction(tr("Toggle &Theme"), this, &MainWindow::onToggleTheme);
     toggleThemeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_T));
+    toggleThemeAction->setIcon(ThemeManager::icon("palette"));
+    toggleThemeAction->setObjectName("actionTheme");
 
     viewMenu->addSeparator();
 
     QAction *toggleSidebarAction = viewMenu->addAction(tr("Toggle Si&debar"));
     toggleSidebarAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_B));
+    toggleSidebarAction->setIcon(ThemeManager::icon("sidebar"));
+    toggleSidebarAction->setObjectName("actionSidebar");
     connect(toggleSidebarAction, &QAction::triggered, this, &MainWindow::toggleSidebar);
 
     m_togglePreviewAction = viewMenu->addAction(tr("Toggle &Preview"));
     m_togglePreviewAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V));
     m_togglePreviewAction->setCheckable(true);
     m_togglePreviewAction->setChecked(true); // Default to visible
+    m_togglePreviewAction->setIcon(ThemeManager::icon("eye"));
+    m_togglePreviewAction->setObjectName("actionPreview");
     connect(m_togglePreviewAction, &QAction::triggered, this, [this]() {
         m_previewPane->setVisible(m_togglePreviewAction->isChecked());
         schedulePreviewUpdate();
@@ -358,6 +384,8 @@ void MainWindow::setupMenuBar()
     m_toggleOutlineAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O));
     m_toggleOutlineAction->setCheckable(true);
     m_toggleOutlineAction->setChecked(true); // Default to visible
+    m_toggleOutlineAction->setIcon(ThemeManager::icon("chevron-down"));
+    m_toggleOutlineAction->setObjectName("actionOutline");
     connect(m_toggleOutlineAction, &QAction::triggered, this, [this]() {
         if (m_outlineDock) m_outlineDock->setVisible(m_toggleOutlineAction->isChecked());
     });
@@ -366,13 +394,19 @@ void MainWindow::setupMenuBar()
 
     QAction *quickOpenAction = viewMenu->addAction(tr("Quick &Open..."), this, &MainWindow::onShowQuickOpen);
     quickOpenAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_P));
+    quickOpenAction->setIcon(ThemeManager::icon("file"));
+    quickOpenAction->setObjectName("actionQuickOpen");
 
     QAction *cmdPaletteAction = viewMenu->addAction(tr("&Command Palette..."), this, &MainWindow::onShowCommandPalette);
     cmdPaletteAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P));
+    cmdPaletteAction->setIcon(ThemeManager::icon("terminal"));
+    cmdPaletteAction->setObjectName("actionCmdPalette");
 
     // ── Help Menu ──
     QMenu *helpMenu = menuBar()->addMenu(tr("&Help"));
-    helpMenu->addAction(tr("&About NanoMark"), this, &MainWindow::onShowAbout);
+    QAction *aboutAction = helpMenu->addAction(tr("&About NanoMark"), this, &MainWindow::onShowAbout);
+    aboutAction->setIcon(ThemeManager::icon("help-circle"));
+    aboutAction->setObjectName("actionAbout");
 }
 
 void MainWindow::setupToolBar()
@@ -383,80 +417,83 @@ void MainWindow::setupToolBar()
     m_toolBar->setIconSize(QSize(18, 18));
 
     // Sidebar toggle button (left-aligned)
-    QAction *toggleSidebarAction = new QAction(tr("📂 Sidebar"), this);
+    QAction *toggleSidebarAction = new QAction(ThemeManager::icon("sidebar"), "", this);
     toggleSidebarAction->setToolTip(tr("Toggle Sidebar (Ctrl+Shift+B)"));
+    toggleSidebarAction->setObjectName("actionSidebarToolbar");
     connect(toggleSidebarAction, &QAction::triggered, this, &MainWindow::toggleSidebar);
     m_toolBar->addAction(toggleSidebarAction);
     m_toolBar->addSeparator();
 
-    // Text formatting buttons
-    auto addFormatAction = [&](const QString &label, const QString &tooltip, auto slot) {
-        QAction *action = m_toolBar->addAction(label);
+    // Helper lambda to add formatted icon actions
+    auto addFormatAction = [&](const QString &iconName, const QString &tooltip, auto slot) {
+        QAction *action = new QAction(ThemeManager::icon(iconName), "", this);
+        action->setObjectName("format_" + iconName);
         action->setToolTip(tooltip);
         connect(action, &QAction::triggered, this, slot);
+        m_toolBar->addAction(action);
     };
 
-    addFormatAction("H1", "Heading 1 (Ctrl+1)", [this]() {
+    addFormatAction("heading-1", tr("Heading 1 (Ctrl+1)"), [this]() {
         if (auto *e = currentEditor()) e->insertFormatting("# ", "");
     });
-    addFormatAction("H2", "Heading 2 (Ctrl+2)", [this]() {
+    addFormatAction("heading-2", tr("Heading 2 (Ctrl+2)"), [this]() {
         if (auto *e = currentEditor()) e->insertFormatting("## ", "");
     });
-    addFormatAction("H3", "Heading 3 (Ctrl+3)", [this]() {
+    addFormatAction("heading-3", tr("Heading 3 (Ctrl+3)"), [this]() {
         if (auto *e = currentEditor()) e->insertFormatting("### ", "");
     });
 
     m_toolBar->addSeparator();
 
-    addFormatAction("B", "Bold (Ctrl+B)", [this]() {
+    addFormatAction("bold", tr("Bold (Ctrl+B)"), [this]() {
         if (auto *e = currentEditor()) e->wrapSelection("**", "**");
     });
-    addFormatAction("I", "Italic (Ctrl+I)", [this]() {
+    addFormatAction("italic", tr("Italic (Ctrl+I)"), [this]() {
         if (auto *e = currentEditor()) e->wrapSelection("*", "*");
     });
-    addFormatAction("S", "Strikethrough", [this]() {
+    addFormatAction("strikethrough", tr("Strikethrough"), [this]() {
         if (auto *e = currentEditor()) e->wrapSelection("~~", "~~");
     });
-    addFormatAction("Code", "Inline Code (Ctrl+`)", [this]() {
+    addFormatAction("code", tr("Inline Code (Ctrl+`)"), [this]() {
         if (auto *e = currentEditor()) e->wrapSelection("`", "`");
     });
 
     m_toolBar->addSeparator();
 
-    addFormatAction("• List", "Unordered List", [this]() {
+    addFormatAction("list", tr("Unordered List"), [this]() {
         if (auto *e = currentEditor()) e->insertFormatting("- ", "");
     });
-    addFormatAction("1. List", "Ordered List", [this]() {
+    addFormatAction("list-ordered", tr("Ordered List"), [this]() {
         if (auto *e = currentEditor()) e->insertFormatting("1. ", "");
     });
-    addFormatAction("☐ Task", "Task List", [this]() {
+    addFormatAction("check-square", tr("Task List"), [this]() {
         if (auto *e = currentEditor()) e->insertFormatting("- [ ] ", "");
     });
 
     m_toolBar->addSeparator();
 
-    addFormatAction("Link", "Insert Link", [this]() {
+    addFormatAction("link", tr("Insert Link"), [this]() {
         if (auto *e = currentEditor()) e->wrapSelection("[", "](url)");
     });
-    addFormatAction("Image", "Insert Image", [this]() {
+    addFormatAction("image", tr("Insert Image"), [this]() {
         if (auto *e = currentEditor()) e->wrapSelection("![alt](", ")");
     });
-    addFormatAction("Table", "Insert Table", [this]() {
+    addFormatAction("table", tr("Insert Table"), [this]() {
         if (auto *e = currentEditor()) e->insertAtCursor(
             "| Column 1 | Column 2 | Column 3 |\n"
             "|----------|----------|----------|\n"
             "| Cell 1   | Cell 2   | Cell 3   |\n");
     });
-    addFormatAction("```", "Code Block", [this]() {
+    addFormatAction("terminal", tr("Code Block"), [this]() {
         if (auto *e = currentEditor()) e->wrapSelection("```\n", "\n```");
     });
 
     m_toolBar->addSeparator();
 
-    addFormatAction("> Quote", "Blockquote", [this]() {
+    addFormatAction("quote", tr("Blockquote"), [this]() {
         if (auto *e = currentEditor()) e->insertFormatting("> ", "");
     });
-    addFormatAction("— Rule", "Horizontal Rule", [this]() {
+    addFormatAction("minus", tr("Horizontal Rule"), [this]() {
         if (auto *e = currentEditor()) e->insertAtCursor("\n---\n");
     });
 }
@@ -1314,6 +1351,7 @@ void MainWindow::onToggleTheme()
     } else {
         tm.loadTheme(ThemeManager::Theme::Dark);
     }
+    updateIcons();
     updatePreview();
 }
 
@@ -1888,6 +1926,55 @@ void MainWindow::dropEvent(QDropEvent *event)
     for (const QUrl &url : urls) {
         if (url.isLocalFile()) {
             openFile(url.toLocalFile());
+        }
+    }
+}
+
+void MainWindow::updateIcons()
+{
+    // Update main menu actions
+    QList<QPair<QString, QString>> mappings = {
+        {"actionNew", "file"},
+        {"actionOpen", "folder-open"},
+        {"actionSave", "save"},
+        {"actionSaveAs", "save"},
+        {"actionPrint", "printer"},
+        {"actionUndo", "undo"},
+        {"actionRedo", "redo"},
+        {"actionCut", "scissors"},
+        {"actionCopy", "copy"},
+        {"actionPaste", "clipboard"},
+        {"actionFind", "search"},
+        {"actionStudy", "book-open"},
+        {"actionTheme", "palette"},
+        {"actionSidebar", "sidebar"},
+        {"actionPreview", "eye"},
+        {"actionOutline", "chevron-down"},
+        {"actionQuickOpen", "file"},
+        {"actionCmdPalette", "terminal"},
+        {"actionAbout", "help-circle"}
+    };
+
+    for (const auto &p : mappings) {
+        if (QAction *action = findChild<QAction*>(p.first)) {
+            action->setIcon(ThemeManager::icon(p.second));
+        }
+    }
+
+    // Update toolbar actions
+    if (QAction *action = findChild<QAction*>("actionSidebarToolbar")) {
+        action->setIcon(ThemeManager::icon("sidebar"));
+    }
+
+    // Update formatting actions
+    QStringList formats = {
+        "heading-1", "heading-2", "heading-3", "bold", "italic",
+        "strikethrough", "code", "list", "list-ordered", "check-square",
+        "link", "image", "table", "terminal", "quote", "minus"
+    };
+    for (const auto &fmt : formats) {
+        if (QAction *action = findChild<QAction*>("format_" + fmt)) {
+            action->setIcon(ThemeManager::icon(fmt));
         }
     }
 }
