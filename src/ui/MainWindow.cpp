@@ -725,10 +725,10 @@ void MainWindow::onExportPDF()
     // Find the correct Python executable (.venv or system python)
     QString projectDir = QCoreApplication::applicationDirPath() + "/..";
     // Check developer path structures
-    if (!QFile::exists(projectDir + "/pdf_service/service.py")) {
+    if (!QFile::exists(projectDir + "/microservices/pdf_service/service.py")) {
         projectDir = QCoreApplication::applicationDirPath() + "/../..";
     }
-    if (!QFile::exists(projectDir + "/pdf_service/service.py")) {
+    if (!QFile::exists(projectDir + "/microservices/pdf_service/service.py")) {
         projectDir = QDir::currentPath();
     }
 
@@ -737,7 +737,7 @@ void MainWindow::onExportPDF()
         pythonPath = "python3";
     }
 
-    QString scriptPath = projectDir + "/pdf_service/service.py";
+    QString scriptPath = projectDir + "/microservices/pdf_service/service.py";
 
     QStringList arguments;
     arguments << scriptPath << "--cli" << "--input" << tempMdPath << "--output" << filePath << "--type" << "pdf";
@@ -780,10 +780,10 @@ void MainWindow::onExportHTML()
     tempFile.close();
 
     QString projectDir = QCoreApplication::applicationDirPath() + "/..";
-    if (!QFile::exists(projectDir + "/pdf_service/service.py")) {
+    if (!QFile::exists(projectDir + "/microservices/pdf_service/service.py")) {
         projectDir = QCoreApplication::applicationDirPath() + "/../..";
     }
-    if (!QFile::exists(projectDir + "/pdf_service/service.py")) {
+    if (!QFile::exists(projectDir + "/microservices/pdf_service/service.py")) {
         projectDir = QDir::currentPath();
     }
 
@@ -792,7 +792,7 @@ void MainWindow::onExportHTML()
         pythonPath = "python3";
     }
 
-    QString scriptPath = projectDir + "/pdf_service/service.py";
+    QString scriptPath = projectDir + "/microservices/pdf_service/service.py";
 
     QStringList arguments;
     arguments << scriptPath << "--cli" << "--input" << tempMdPath << "--output" << filePath << "--type" << "html";

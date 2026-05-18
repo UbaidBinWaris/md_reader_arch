@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# NanoMark Test Runner
+set -e
+
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+show_help() {
+    echo -e "${BLUE}NanoMark Test Suite Guide:${NC}"
+    echo -e "Usage: ./test [options]"
+    echo -e ""
+    echo -e "Options:"
+    echo -e "  -h, --help      Show this help menu"
+    echo -e "  -c, --cpp       Run C++ renderer unit tests only"
+    echo -e "  -p, --python    Run Python microservice integration tests only"
+    echo -e "  -a, --all       Run all C++ and Python tests [Default]"
+    echo -e "  -f, --fix       Verify virtual environment setup and C++ binary before running tests"
+}
+
+RUN_CPP=true
+RUN_PYTHON=true
+FIX_MODE=false
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -h|--help) show_help; exit 0 ;;
+        -c|--cpp) RUN_CPP=true; RUN_PYTHON=false; shift ;;
+        -p|--python) RUN_CPP=false; RUN_PYTHON=true; shift ;;
+        -a|--all) RUN_CPP=true; RUN_PYTHON=true; shift ;;
+        -f|--fix) FIX_MODE=true; shift ;;
+        *) echo -e "${RED}Unknown option: $1${NC}"; show_help; exit 1 ;;
+    esac
+done
+
+echo -e "${BLUE}===================================================${NC}"
+echo -e "${BLUE}     NanoMark Unified Test Runner Tool              ${NC}"
+echo -e "${BLUE}===================================================${NC}"
+
+if [ "$FIX_MODE" = true ]; then
+    echo -e "${YELLOW}Fix Mode Active: Verifying project environment...${NC}"
+    if [ ! -d ".venv" ] || [ ! -f ".venv/bin/activate" ]; then
+        echo -e "${YELLOW}Virtual environment is missing or broken. Re-running ./install...${NC}"
+        ./install -f
+    fi
+    if [ ! -d "build" ] || [ ! -f "build/tests/test_renderer" ]; then
+        echo -e "${YELLOW}C++ build outputs are missing. Re-running ./build.sh...${NC}"
+        ./build.sh
+    fi
+fi
+
+# Run C++ Unit Tests
+if [ "$RUN_CPP" = true ]; then
+    echo -e "\n${YELLOW}--- Running C++ Unit Tests ---${NC}"
+    if [ -f "build/tests/test_renderer" ]; then
+        ./build/tests/test_renderer
+        echo -e "${GREEN}✓ C++ Unit Tests Passed!${NC}"
+    else
+        echo -e "${RED}Error: build/tests/test_renderer binary not found.${NC}"
+        echo -e "${RED}Please run ./build.sh to compile the C++ binaries first.${NC}"
+        exit 1
+    fi
+fi
+
+# Run Python Integration Tests
+if [ "$RUN_PYTHON" = true ]; then
+    echo -e "\n${YELLOW}--- Running Python Integration Tests ---${NC}"
+    if [ -d ".venv" ] && [ -f ".venv/bin/activate" ]; then
+        source .venv/bin/activate
+        python microservices/pdf_service/test_integration.py
+    else
+        echo -e "${RED}Error: Python virtual environment not found.${NC}"
+        echo -e "${RED}Please run ./install to set up dependencies first.${NC}"
+        exit 1
+    fi
+fi
+
+echo -e "\n${BLUE}===================================================${NC}"
+echo -e "${GREEN}   All selected tests successfully passed!         ${NC}"
+echo -e "${BLUE}===================================================${NC}"

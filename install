@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# NanoMark Dependencies Installer Script
+set -e
+
+# Premium theme colors
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+show_help() {
+    echo -e "${BLUE}NanoMark Dependency Setup Guide:${NC}"
+    echo -e "Usage: ./install [options]"
+    echo -e ""
+    echo -e "Options:"
+    echo -e "  -h, --help      Show this help menu"
+    echo -e "  -f, --fix       Force-recreate the virtual environment and clean up cache to fix broken setups"
+    echo -e "  -s, --status    Check the status of system and python dependencies without installing"
+}
+
+check_status() {
+    echo -e "${BLUE}--- Dependency Status Check ---${NC}"
+    if command -v python3 &> /dev/null; then
+        echo -e "Python 3: ${GREEN}Installed (${NC}$(python3 --version)${GREEN})${NC}"
+    else
+        echo -e "Python 3: ${RED}NOT Installed${NC}"
+    fi
+
+    if [ -d ".venv" ]; then
+        echo -e "Virtual Environment (.venv): ${GREEN}Created${NC}"
+        if [ -f ".venv/bin/weasyprint" ]; then
+            echo -e "  weasyprint: ${GREEN}Available${NC} ($(.venv/bin/weasyprint --version))"
+        else
+            echo -e "  weasyprint: ${RED}Missing${NC}"
+        fi
+        if [ -f ".venv/bin/python" ] && .venv/bin/python -c "import markdown" &>/dev/null; then
+            echo -e "  markdown: ${GREEN}Available${NC}"
+        else
+            echo -e "  markdown: ${RED}Missing${NC}"
+        fi
+    else
+        echo -e "Virtual Environment (.venv): ${RED}Missing${NC}"
+    fi
+}
+
+FIX_MODE=false
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -h|--help) show_help; exit 0 ;;
+        -f|--fix) FIX_MODE=true; shift ;;
+        -s|--status) check_status; exit 0 ;;
+        *) echo -e "${RED}Unknown option: $1${NC}"; show_help; exit 1 ;;
+    esac
+done
+
+echo -e "${BLUE}===================================================${NC}"
+echo -e "${BLUE}     NanoMark Dependencies Installation Tool        ${NC}"
+echo -e "${BLUE}===================================================${NC}"
+
+if [ "$FIX_MODE" = true ]; then
+    echo -e "${YELLOW}Fix Mode Active: Recreating Python Virtual Environment...${NC}"
+    rm -rf .venv
+fi
+
+# Check Python 3
+if ! command -v python3 &> /dev/null; then
+    echo -e "${RED}Error: Python 3 is not installed or not in system PATH.${NC}"
+    echo -e "${RED}Please install Python 3 and try again.${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ Python 3 detected.${NC}"
+
+# Setup .venv
+if [ ! -d ".venv" ]; then
+    echo -e "${YELLOW}Creating Python virtual environment (.venv)...${NC}"
+    python3 -m venv .venv
+    echo -e "${GREEN}✓ Virtual environment created successfully.${NC}"
+else
+    echo -e "${GREEN}✓ Existing virtual environment found.${NC}"
+fi
+
+# Activate venv
+echo -e "${YELLOW}Activating virtual environment...${NC}"
+source .venv/bin/activate
+
+# Upgrade pip
+echo -e "${YELLOW}Upgrading pip...${NC}"
+pip install --upgrade pip
+
+# Install dependencies from requirements.txt
+if [ -f "requirements.txt" ]; then
+    echo -e "${YELLOW}Installing python requirements...${NC}"
+    pip install -r requirements.txt
+    echo -e "${GREEN}✓ Python dependencies successfully installed!${NC}"
+else
+    echo -e "${RED}Error: requirements.txt not found in workspace root.${NC}"
+    exit 1
+fi
+
+# Ensure service script is executable
+if [ -f "microservices/pdf_service/service.py" ]; then
+    chmod +x microservices/pdf_service/service.py
+    echo -e "${GREEN}✓ microservices/pdf_service/service.py marked executable.${NC}"
+fi
+
+echo -e "${BLUE}===================================================${NC}"
+echo -e "${GREEN}   Installation Complete! Ready to compile & run.   ${NC}"
+echo -e "${BLUE}===================================================${NC}"
