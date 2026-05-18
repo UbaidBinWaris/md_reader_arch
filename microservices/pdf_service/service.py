@@ -40,13 +40,13 @@ h1, h2, h3, h4, h5, h6 {
 
 h1 {
     font-size: 2.2em;
-    border-bottom: 1px solid #e5e5e5;
+    border-bottom: 1px solid #cccccc;
     padding-bottom: 0.3em;
 }
 
 h2 {
     font-size: 1.6em;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid #dcdcdc;
     padding-bottom: 0.2em;
 }
 
@@ -72,7 +72,7 @@ code {
     border-radius: 4px;
     background: #f5f5f5 !important;
     color: #0d8c6d !important;
-    border: 1px solid #e5e5e5;
+    border: 1px solid #cccccc;
 }
 
 pre {
@@ -80,7 +80,7 @@ pre {
     padding: 16px;
     border-radius: 6px;
     background: #f8f8f8 !important;
-    border: 1px solid #e5e5e5;
+    border: 1px solid #cccccc;
     page-break-inside: avoid;
     overflow-x: auto;
 }
@@ -116,18 +116,18 @@ table {
     border-collapse: collapse;
     margin: 1.5em 0;
     width: 100%;
-    border: 1px solid #e5e5e5;
+    border: 1px solid #b0b0b0;
     page-break-inside: avoid;
 }
 
 th, td {
     padding: 10px 14px;
     text-align: left;
-    border: 1px solid #e5e5e5;
+    border: 1px solid #b0b0b0;
 }
 
 th {
-    background-color: #f5f5f5 !important;
+    background-color: #f0f0f0 !important;
     color: #111111 !important;
     font-weight: 600;
     font-size: 10.5pt;
@@ -139,14 +139,14 @@ td {
 }
 
 tr:nth-child(even) {
-    background-color: #fcfcfc !important;
+    background-color: #f7f7f7 !important;
 }
 
 hr {
     margin: 2.2em 0;
     border: none;
     height: 1px;
-    background: #e5e5e5;
+    background: #cccccc;
 }
 
 img {
