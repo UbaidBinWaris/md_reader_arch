@@ -129,6 +129,11 @@ void MainWindow::setupUI()
             this, &MainWindow::onTabCloseRequested);
 
     m_previewPane = new PreviewPane(this);
+    connect(m_previewPane, &PreviewPane::headingVisibleAtTopChanged, this, [this](int lineNumber) {
+        if (m_isStudyMode) {
+            highlightOutlineHeadingAtLine(lineNumber);
+        }
+    });
 
     m_studyTabBar = new QTabBar(this);
     m_studyTabBar->setTabsClosable(true);
@@ -351,6 +356,14 @@ void MainWindow::setupMenuBar()
         schedulePreviewUpdate();
     });
 
+    m_toggleOutlineAction = viewMenu->addAction(tr("Toggle &Outline"));
+    m_toggleOutlineAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O));
+    m_toggleOutlineAction->setCheckable(true);
+    m_toggleOutlineAction->setChecked(true); // Default to visible
+    connect(m_toggleOutlineAction, &QAction::triggered, this, [this]() {
+        if (m_outlineDock) m_outlineDock->setVisible(m_toggleOutlineAction->isChecked());
+    });
+
     viewMenu->addSeparator();
 
     QAction *quickOpenAction = viewMenu->addAction(tr("Quick &Open..."), this, &MainWindow::onShowQuickOpen);
@@ -545,6 +558,12 @@ void MainWindow::setupSidebar()
     // Tab the two docks together
     tabifyDockWidget(m_sidebarDock, m_outlineDock);
     m_sidebarDock->raise();
+
+    connect(m_outlineDock, &QDockWidget::visibilityChanged, this, [this](bool visible) {
+        if (m_toggleOutlineAction) {
+            m_toggleOutlineAction->setChecked(visible);
+        }
+    });
 }
 
 void MainWindow::setupShortcuts()
@@ -1522,15 +1541,23 @@ void MainWindow::syncOutlineHighlight()
 
     // Use first visible block line number for natural reading position tracking
     int currentLine = editor->firstVisibleBlock().blockNumber() + 1;
-    
-    // Retrieve extracted headings from the renderer directly
+    highlightOutlineHeadingAtLine(currentLine);
+}
+
+void MainWindow::highlightOutlineHeadingAtLine(int lineNumber)
+{
+    if (!m_outlineModel || !m_outlineFilterProxyModel) return;
+
+    auto *editor = currentEditor();
+    if (!editor) return;
+
     QString markdown = editor->toPlainText();
     auto headings = m_renderer->extractHeadings(markdown);
     if (headings.isEmpty()) return;
 
     int activeIndex = -1;
     for (int i = 0; i < headings.size(); ++i) {
-        if (headings[i].lineNumber <= currentLine) {
+        if (headings[i].lineNumber <= lineNumber) {
             activeIndex = i;
         } else {
             break;
@@ -1540,7 +1567,7 @@ void MainWindow::syncOutlineHighlight()
     if (activeIndex != -1) {
         QModelIndex srcIndex = m_outlineModel->index(activeIndex, 0);
         QModelIndex proxyIndex = m_outlineFilterProxyModel->mapFromSource(srcIndex);
-        if (proxyIndex.isValid()) {
+        if (proxyIndex.isValid() && proxyIndex != m_outlineView->currentIndex()) {
             m_outlineView->blockSignals(true);
             m_outlineView->setCurrentIndex(proxyIndex);
             m_outlineView->scrollTo(proxyIndex, QAbstractItemView::EnsureVisible);

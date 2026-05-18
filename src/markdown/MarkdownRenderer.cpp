@@ -131,7 +131,7 @@ QString MarkdownRenderer::markdownToHtml(const QString &markdown) const
             QString id = headingMatch.captured(2).toLower()
                 .replace(QRegularExpression("[^a-z0-9]+"), "-")
                 .replace(QRegularExpression("^-|-$"), "");
-            html += QString("<h%1 id='%2'>%3</h%1>\n").arg(level).arg(id, text);
+            html += QString("<h%1 id='%2' data-line='%3'>%4</h%1>\n").arg(level).arg(id).arg(i + 1).arg(text);
             continue;
         }
 

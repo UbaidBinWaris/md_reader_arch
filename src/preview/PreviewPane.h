@@ -35,6 +35,9 @@ public:
     /** Export current content to PDF */
     void exportToPDF(const QString &filePath, const QString &html);
 
+signals:
+    void headingVisibleAtTopChanged(int lineNumber);
+
 protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;

@@ -100,6 +100,16 @@ void PreviewPane::initWebEngine()
     connect(m_webView, &QWebEngineView::loadStarted, this, &PreviewPane::onLoadStarted);
     connect(m_webView, &QWebEngineView::loadProgress, this, &PreviewPane::onLoadProgress);
     connect(m_webView, &QWebEngineView::loadFinished, this, &PreviewPane::onLoadFinished);
+    connect(m_webView->page(), &QWebEnginePage::scrollPositionChanged, this, [this](const QPointF &) {
+        m_webView->page()->runJavaScript("window.getActiveHeadingLineNumber ? window.getActiveHeadingLineNumber() : -1", [this](const QVariant &res) {
+            if (res.isValid()) {
+                int line = res.toInt();
+                if (line > 0) {
+                    emit headingVisibleAtTopChanged(line);
+                }
+            }
+        });
+    });
     
     m_layout->addWidget(m_webView);
     installScrollFilterRecursive(m_webView, this);
@@ -154,6 +164,22 @@ void PreviewPane::initWebEngine()
             doc.scrollTop = percent * total;
             lastScrollPercent = percent;
         }
+    };
+
+    window.getActiveHeadingLineNumber = function() {
+        var headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
+        var activeLine = -1;
+        for (var i = 0; i < headings.length; i++) {
+            var h = headings[i];
+            var rect = h.getBoundingClientRect();
+            if (rect.top <= 120) {
+                var line = parseInt(h.getAttribute('data-line'));
+                if (!isNaN(line)) {
+                    activeLine = line;
+                }
+            }
+        }
+        return activeLine;
     };
 
     window.updateContent = function(html, isDark, css) {
@@ -403,9 +429,11 @@ bool PreviewPane::eventFilter(QObject *obj, QEvent *event)
         while (p) {
             if (MainWindow *mw = qobject_cast<MainWindow*>(p)) {
                 if (auto *editor = mw->currentEditor()) {
-                    QWheelEvent *wheelEvent = static_cast<QWheelEvent*>(event);
-                    QApplication::sendEvent(editor->verticalScrollBar(), wheelEvent);
-                    return true;
+                    if (editor->isVisible()) {
+                        QWheelEvent *wheelEvent = static_cast<QWheelEvent*>(event);
+                        QApplication::sendEvent(editor->verticalScrollBar(), wheelEvent);
+                        return true;
+                    }
                 }
                 break;
             }

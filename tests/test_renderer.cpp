@@ -19,7 +19,7 @@ private slots:
     void testHeadings() {
         QString md = "# Heading 1";
         QString html = m_renderer->render(md);
-        QVERIFY(html.contains("<h1 id='heading-1'>Heading 1</h1>"));
+        QVERIFY(html.contains("<h1 id='heading-1' data-line='1'>Heading 1</h1>"));
     }
 
     void testBold() {

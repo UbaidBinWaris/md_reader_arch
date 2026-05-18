@@ -92,6 +92,7 @@ private:
     void updatePreview();
     void updateStatusBar();
     void syncOutlineHighlight();
+    void highlightOutlineHeadingAtLine(int lineNumber);
     void updateWindowTitle();
     void saveWindowState();
     void updateStudyTabBar();
@@ -115,6 +116,7 @@ private:
     QSortFilterProxyModel *m_outlineFilterProxyModel = nullptr;
     QAction *m_toggleStudyAction = nullptr;
     QAction *m_togglePreviewAction = nullptr;
+    QAction *m_toggleOutlineAction = nullptr;
     QToolBar *m_toolBar = nullptr;
 
     // Status bar labels
