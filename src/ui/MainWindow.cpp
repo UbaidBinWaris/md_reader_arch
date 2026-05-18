@@ -44,6 +44,9 @@
 #include <QTextBlock>
 #include <QApplication>
 #include <QStyle>
+#include <QProcess>
+#include <QDir>
+#include <QFile>
 
 namespace NanoMark {
 
@@ -708,9 +711,52 @@ void MainWindow::onExportPDF()
 
     if (filePath.isEmpty()) return;
 
-    QString html = m_renderer->render(editor->toPlainText());
-    m_previewPane->exportToPDF(filePath, html);
-    statusBar()->showMessage(tr("Exported to PDF: %1").arg(filePath), 3000);
+    // Use Python PDF script for perfect rendering!
+    // Write markdown to a temporary file
+    QString tempMdPath = QDir::tempPath() + "/nanomark_export_temp.md";
+    QFile tempFile(tempMdPath);
+    if (!tempFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, tr("Export Error"), tr("Failed to create temporary export file."));
+        return;
+    }
+    tempFile.write(editor->toPlainText().toUtf8());
+    tempFile.close();
+
+    // Find the correct Python executable (.venv or system python)
+    QString projectDir = QCoreApplication::applicationDirPath() + "/..";
+    // Check developer path structures
+    if (!QFile::exists(projectDir + "/pdf_service/service.py")) {
+        projectDir = QCoreApplication::applicationDirPath() + "/../..";
+    }
+    if (!QFile::exists(projectDir + "/pdf_service/service.py")) {
+        projectDir = QDir::currentPath();
+    }
+
+    QString pythonPath = projectDir + "/.venv/bin/python";
+    if (!QFile::exists(pythonPath)) {
+        pythonPath = "python3";
+    }
+
+    QString scriptPath = projectDir + "/pdf_service/service.py";
+
+    QStringList arguments;
+    arguments << scriptPath << "--cli" << "--input" << tempMdPath << "--output" << filePath << "--type" << "pdf";
+
+    QProcess process;
+    process.start(pythonPath, arguments);
+    if (process.waitForFinished(15000)) {
+        QFile::remove(tempMdPath);
+        if (process.exitCode() == 0) {
+            statusBar()->showMessage(tr("Exported to PDF: %1").arg(filePath), 3000);
+        } else {
+            QString errorOutput = process.readAllStandardError();
+            QMessageBox::warning(this, tr("Export Error"), 
+                tr("Python export failed:\n%1").arg(errorOutput));
+        }
+    } else {
+        QFile::remove(tempMdPath);
+        QMessageBox::warning(this, tr("Export Error"), tr("Export process timed out."));
+    }
 }
 
 void MainWindow::onExportHTML()
@@ -723,10 +769,48 @@ void MainWindow::onExportHTML()
 
     if (filePath.isEmpty()) return;
 
-    QString html = m_renderer->renderStandalone(editor->toPlainText());
-    auto result = m_fileManager->writeFile(filePath, html);
-    if (result.success) {
-        statusBar()->showMessage(tr("Exported to HTML: %1").arg(filePath), 3000);
+    // Use Python script for premium HTML formatting!
+    QString tempMdPath = QDir::tempPath() + "/nanomark_export_temp.md";
+    QFile tempFile(tempMdPath);
+    if (!tempFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, tr("Export Error"), tr("Failed to create temporary export file."));
+        return;
+    }
+    tempFile.write(editor->toPlainText().toUtf8());
+    tempFile.close();
+
+    QString projectDir = QCoreApplication::applicationDirPath() + "/..";
+    if (!QFile::exists(projectDir + "/pdf_service/service.py")) {
+        projectDir = QCoreApplication::applicationDirPath() + "/../..";
+    }
+    if (!QFile::exists(projectDir + "/pdf_service/service.py")) {
+        projectDir = QDir::currentPath();
+    }
+
+    QString pythonPath = projectDir + "/.venv/bin/python";
+    if (!QFile::exists(pythonPath)) {
+        pythonPath = "python3";
+    }
+
+    QString scriptPath = projectDir + "/pdf_service/service.py";
+
+    QStringList arguments;
+    arguments << scriptPath << "--cli" << "--input" << tempMdPath << "--output" << filePath << "--type" << "html";
+
+    QProcess process;
+    process.start(pythonPath, arguments);
+    if (process.waitForFinished(15000)) {
+        QFile::remove(tempMdPath);
+        if (process.exitCode() == 0) {
+            statusBar()->showMessage(tr("Exported to HTML: %1").arg(filePath), 3000);
+        } else {
+            QString errorOutput = process.readAllStandardError();
+            QMessageBox::warning(this, tr("Export Error"), 
+                tr("Python export failed:\n%1").arg(errorOutput));
+        }
+    } else {
+        QFile::remove(tempMdPath);
+        QMessageBox::warning(this, tr("Export Error"), tr("Export process timed out."));
     }
 }
 
